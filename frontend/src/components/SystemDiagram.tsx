@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
-// ─── Data ────────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
-export type NodeCategory = "root" | "kernel" | "library" | "highlight" | "service" | "userspace";
+export type NodeCategory =
+  | "root" | "kernel" | "library" | "highlight"
+  | "service" | "userspace" | "protocol" | "crypto";
 
 export type TreeNode = {
   id: string;
@@ -13,70 +15,335 @@ export type TreeNode = {
   children?: TreeNode[];
 };
 
+// ─── OpenSSL detailed subtree ─────────────────────────────────────────────────
+
+const OPENSSL_CHILDREN: TreeNode[] = [
+  {
+    id: "ossl_libcrypto",
+    label: "libcrypto",
+    sublabel: "General-purpose crypto",
+    category: "crypto",
+    description: "The general-purpose cryptographic library. Provides mathematical implementations, data manipulation routines, and low-level algorithms. Independent of network protocols.",
+    children: [
+      {
+        id: "ossl_evp",
+        label: "EVP API",
+        sublabel: "High-level wrapper",
+        category: "crypto",
+        description: "High-level API wrapper for cryptography. Developers use generic EVP functions, allowing algorithm swaps without rewriting application logic.",
+        children: [
+          {
+            id: "ossl_sym",
+            label: "Symmetric Ciphers",
+            sublabel: "AES, ChaCha20, GCM",
+            category: "crypto",
+            description: "High-level wrappers for symmetric encryption like AES and ChaCha20, handling block modes (CBC, GCM) and padding.",
+          },
+          {
+            id: "ossl_asym",
+            label: "Asymmetric Ciphers",
+            sublabel: "RSA, DSA, ECC",
+            category: "crypto",
+            description: "Wrappers for public-key operations including RSA, DSA, and ECC — encryption, decryption, signing, and verifying.",
+          },
+          {
+            id: "ossl_digest",
+            label: "Message Digests",
+            sublabel: "SHA-256, SHA-3, BLAKE2",
+            category: "crypto",
+            description: "Unified interfaces for hashing algorithms such as SHA-256, SHA-3, and BLAKE2.",
+          },
+        ],
+      },
+      {
+        id: "ossl_bio",
+        label: "BIO Subsystem",
+        sublabel: "I/O abstraction layer",
+        category: "library",
+        description: "OpenSSL's custom I/O abstraction. Provides a uniform interface for reading and writing data regardless of whether the backend is a socket, file, or memory buffer.",
+        children: [
+          {
+            id: "ossl_bio_ss",
+            label: "Source/Sink BIOs",
+            sublabel: "File, socket, memory",
+            category: "library",
+            description: "Endpoints for data: BIO_s_file (file I/O), BIO_s_socket (network I/O), and BIO_s_mem (memory buffers).",
+          },
+          {
+            id: "ossl_bio_filter",
+            label: "Filter BIOs",
+            sublabel: "Transform intermediaries",
+            category: "library",
+            description: "Intermediaries that modify data in transit, such as BIO_f_base64 (encoding/decoding) or BIO_f_cipher (streaming encryption).",
+          },
+        ],
+      },
+      {
+        id: "ossl_x509",
+        label: "X.509 & ASN.1",
+        sublabel: "Certificate handling",
+        category: "library",
+        description: "Handles parsing, serialization, and validation of digital certificates and complex cryptographic data structures.",
+        children: [
+          {
+            id: "ossl_asn1",
+            label: "ASN.1 Parser",
+            sublabel: "DER/PEM encoding",
+            category: "library",
+            description: "Translates abstract ASN.1 notation into C structures and handles DER/PEM encoding and decoding.",
+          },
+          {
+            id: "ossl_chain",
+            label: "Chain Verification",
+            sublabel: "Trust chain & CRL/OCSP",
+            category: "library",
+            description: "Validates certificate trust chains, checks Revocation Lists (CRLs), and processes OCSP responses.",
+          },
+        ],
+      },
+      {
+        id: "ossl_bignum",
+        label: "BIGNUM Math",
+        sublabel: "Arbitrary-precision math",
+        category: "library",
+        description: "Arbitrary-precision integer arithmetic required for public-key cryptography (e.g., multiplying 4096-bit primes for RSA).",
+      },
+      {
+        id: "ossl_rand",
+        label: "RAND Subsystem",
+        sublabel: "Secure PRNG",
+        category: "library",
+        description: "Secure pseudorandom number generator (PRNG) seeded from the OS entropy pool (e.g., /dev/urandom).",
+      },
+    ],
+  },
+  {
+    id: "ossl_libssl",
+    label: "libssl",
+    sublabel: "TLS / DTLS / QUIC",
+    category: "protocol",
+    description: "Implements secure network protocols (TLS, DTLS, QUIC). Manages complex state machines for handshakes and data framing, relying entirely on libcrypto for cryptographic operations.",
+    children: [
+      {
+        id: "ossl_tls_sm",
+        label: "TLS State Machine",
+        sublabel: "Handshake orchestration",
+        category: "protocol",
+        description: "Manages the back-and-forth communication to establish a secure connection, including cipher negotiation and certificate exchange.",
+        children: [
+          {
+            id: "ossl_handshake",
+            label: "Handshake Logic",
+            sublabel: "ClientHello → Finished",
+            category: "protocol",
+            description: "Manages the sequence of ClientHello, ServerHello, Key Exchange, and Certificate validation messages.",
+          },
+          {
+            id: "ossl_alert",
+            label: "Alert Handling",
+            sublabel: "Fatal & warning signals",
+            category: "protocol",
+            description: "Processes and generates fatal or warning protocol alerts (e.g., certificate_expired, bad_record_mac).",
+          },
+        ],
+      },
+      {
+        id: "ossl_record",
+        label: "Record Layer",
+        sublabel: "Framing & protection",
+        category: "protocol",
+        description: "Takes application data, breaks it into chunks (max 16 KB), and secures it before transmission using the negotiated AEAD cipher.",
+        children: [
+          {
+            id: "ossl_framing",
+            label: "Framing",
+            sublabel: "16 KB TLS records",
+            category: "protocol",
+            description: "Chops continuous application data streams into discrete TLS records (maximum 16 KB each).",
+          },
+          {
+            id: "ossl_recprot",
+            label: "Record Protection",
+            sublabel: "AEAD encryption",
+            category: "protocol",
+            description: "Applies the negotiated AEAD ciphers (e.g., AES-GCM, ChaCha20-Poly1305) to each record via the EVP API.",
+          },
+        ],
+      },
+      {
+        id: "ossl_quic",
+        label: "QUIC Subsystem",
+        sublabel: "UDP secure transport",
+        category: "protocol",
+        description: "Introduced in OpenSSL 3.2+. Handles modern UDP-based secure transport with multiplexed streams and reduced connection overhead.",
+        children: [
+          {
+            id: "ossl_quic_mux",
+            label: "Stream Multiplexing",
+            sublabel: "Concurrent streams / UDP",
+            category: "protocol",
+            description: "Handles multiple concurrent communication streams over a single UDP connection without head-of-line blocking.",
+          },
+          {
+            id: "ossl_quic_udp",
+            label: "UDP Integration",
+            sublabel: "Datagram bypass",
+            category: "protocol",
+            description: "Bypasses traditional TCP socket BIOs to work directly with UDP datagrams.",
+          },
+        ],
+      },
+      {
+        id: "ossl_session",
+        label: "Session Management",
+        sublabel: "Connection resumption",
+        category: "protocol",
+        description: "Handles caching and resumption of previously established connections to save costly cryptographic overhead on reconnects.",
+        children: [
+          {
+            id: "ossl_cache",
+            label: "Session Caching",
+            sublabel: "In-memory master secrets",
+            category: "protocol",
+            description: "Stores negotiated master secrets in memory to speed up future connections from the same client.",
+          },
+          {
+            id: "ossl_tickets",
+            label: "Stateless Tickets",
+            sublabel: "RFC 5077 session tickets",
+            category: "protocol",
+            description: "Implements RFC 5077 session tickets, allowing servers to offload connection state storage to the client.",
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: "ossl_apps",
+    label: "apps/ CLI Tools",
+    sublabel: "openssl command-line",
+    category: "userspace",
+    description: "The `openssl` command-line utility — a user-facing wrapper around libcrypto and libssl for diagnostics, certificate operations, and key management.",
+    children: [
+      {
+        id: "ossl_diag",
+        label: "Diagnostic Tools",
+        sublabel: "s_client, s_server",
+        category: "userspace",
+        description: "Commands to spin up barebones TLS clients or servers to test handshakes, cipher suites, and certificate chains.",
+      },
+      {
+        id: "ossl_certops",
+        label: "Certificate Ops",
+        sublabel: "req, x509, ca",
+        category: "userspace",
+        description: "Commands like 'req' to generate Certificate Signing Requests and 'x509' to display, edit, and convert certificate files.",
+      },
+      {
+        id: "ossl_keymgmt",
+        label: "Key Management",
+        sublabel: "genpkey, pkey",
+        category: "userspace",
+        description: "Commands like 'genpkey' for generating modern private keys (RSA, Ed25519, ECDSA) and 'pkey' for inspecting them.",
+      },
+    ],
+  },
+  {
+    id: "ossl_provider_arch",
+    label: "Provider Architecture",
+    sublabel: "Pluggable algorithms",
+    category: "service",
+    description: "The pluggable architectural model introduced in OpenSSL 3.0. Dynamically loads cryptographic algorithm implementations at runtime, enabling FIPS compliance and hardware offload.",
+    children: [
+      {
+        id: "ossl_provider_core",
+        label: "Provider Core",
+        sublabel: "Algorithm dispatcher",
+        category: "service",
+        description: "Central registry inside libcrypto. Routes requests for cryptographic algorithms to the appropriate active Provider, intercepting EVP calls.",
+        children: [
+          {
+            id: "ossl_alg_fetch",
+            label: "Algorithm Fetching",
+            sublabel: "EVP → provider lookup",
+            category: "service",
+            description: "Intercepts EVP calls (e.g., 'fetch AES-256-GCM') and searches loaded providers for a valid implementation.",
+          },
+          {
+            id: "ossl_prop_query",
+            label: "Property Querying",
+            sublabel: "Trait-based selection",
+            category: "service",
+            description: "Allows requesting algorithms by traits (e.g., 'fips=yes' or 'provider=default') for fine-grained control.",
+          },
+        ],
+      },
+      {
+        id: "ossl_default_prov",
+        label: "Default Provider",
+        sublabel: "Standard modern algos",
+        category: "service",
+        description: "Included out-of-the-box. Contains all standard, modern cryptographic algorithms used in modern TLS handshakes.",
+      },
+      {
+        id: "ossl_legacy_prov",
+        label: "Legacy Provider",
+        sublabel: "Deprecated algorithms",
+        category: "service",
+        description: "Contains older deprecated algorithms (MD2, RC4) disabled by default but available for backward compatibility.",
+      },
+      {
+        id: "ossl_fips_prov",
+        label: "FIPS Provider",
+        sublabel: "FIPS 140 validated",
+        category: "service",
+        description: "Specialized module with algorithm implementations rigorously tested against US Government FIPS 140 standards.",
+      },
+      {
+        id: "ossl_ext_prov",
+        label: "External Providers",
+        sublabel: "Third-party & hardware",
+        category: "service",
+        description: "Custom or hardware-specific providers loaded dynamically by the application for HSMs or specialized accelerators.",
+        children: [
+          {
+            id: "ossl_hsm",
+            label: "HSM Integration",
+            sublabel: "Hardware security modules",
+            category: "service",
+            description: "Routes cryptographic operations to physical smart cards or secure enclaves, often via PKCS#11.",
+          },
+        ],
+      },
+    ],
+  },
+];
+
+// ─── Full Linux tree ──────────────────────────────────────────────────────────
+
 const LINUX_TREE: TreeNode = {
   id: "linux",
   label: "Linux",
   sublabel: "Operating System",
   category: "root",
-  description:
-    "An open-source Unix-like operating system kernel first released in 1991 by Linus Torvalds. Today it underpins the majority of web servers, cloud infrastructure, and embedded devices on the planet.",
+  description: "An open-source Unix-like OS kernel first released in 1991. Underpins the majority of web servers, cloud infrastructure, and embedded devices.",
   children: [
     {
       id: "kernel",
       label: "Linux Kernel",
       sublabel: "v6.x core",
       category: "kernel",
-      description:
-        "The core of the OS. Manages hardware resources, process scheduling, memory allocation, device drivers, and exposes system calls to user space.",
+      description: "The core of the OS. Manages hardware resources, process scheduling, memory allocation, device drivers, and exposes system calls to user space.",
       children: [
+        { id: "scheduler", label: "CFS Scheduler", sublabel: "Process scheduling", category: "kernel", description: "Completely Fair Scheduler allocates CPU time via a red-black tree ordered by virtual runtime. Ensures no process is starved while maximising throughput." },
+        { id: "mm", label: "Memory Manager", sublabel: "Virtual memory", category: "kernel", description: "Manages physical and virtual memory via paging, the buddy allocator, and slab caches. Each process gets an isolated virtual address space." },
+        { id: "vfs", label: "VFS Layer", sublabel: "Virtual file system", category: "kernel", description: "Abstraction over concrete file systems (ext4, btrfs, tmpfs, procfs). All file I/O goes through VFS so user-space code is file-system agnostic." },
         {
-          id: "scheduler",
-          label: "CFS Scheduler",
-          sublabel: "Process management",
-          category: "kernel",
-          description:
-            "Completely Fair Scheduler allocates CPU time using a red-black tree ordered by virtual runtime. Ensures no process is starved while maximising throughput.",
-        },
-        {
-          id: "mm",
-          label: "Memory Manager",
-          sublabel: "Virtual memory",
-          category: "kernel",
-          description:
-            "Manages physical and virtual memory via paging, the buddy allocator, and slab caches. Each process gets an isolated virtual address space.",
-        },
-        {
-          id: "vfs",
-          label: "VFS Layer",
-          sublabel: "Virtual file system",
-          category: "kernel",
-          description:
-            "Abstraction over concrete file systems (ext4, btrfs, tmpfs, procfs). All file I/O goes through VFS so user-space code is file-system agnostic.",
-        },
-        {
-          id: "netstack",
-          label: "Network Stack",
-          sublabel: "TCP/IP implementation",
-          category: "kernel",
-          description:
-            "Full TCP/IP networking built into the kernel. Includes the socket API, Netfilter hooks that power iptables/nftables, and hardware NIC drivers.",
+          id: "netstack", label: "Network Stack", sublabel: "TCP/IP implementation", category: "kernel",
+          description: "Full TCP/IP networking in the kernel. Includes socket API, Netfilter hooks (iptables/nftables), and NIC drivers.",
           children: [
-            {
-              id: "tcpip",
-              label: "TCP / IP",
-              sublabel: "Transport layer",
-              category: "kernel",
-              description:
-                "Kernel implementation of IPv4/IPv6, TCP, UDP, and ICMP. Handles connection state machines, retransmission timers, and flow control.",
-            },
-            {
-              id: "netfilter",
-              label: "Netfilter",
-              sublabel: "Packet filtering",
-              category: "kernel",
-              description:
-                "Hook framework for packet inspection, filtering, NAT, and port redirection. The engine behind iptables, nftables, and conntrack.",
-            },
+            { id: "tcpip", label: "TCP / IP", sublabel: "Transport layer", category: "kernel", description: "Kernel implementation of IPv4/IPv6, TCP, UDP, and ICMP. Handles connection state machines, retransmission timers, and flow control." },
+            { id: "netfilter", label: "Netfilter", sublabel: "Packet filtering", category: "kernel", description: "Hook framework for packet inspection, filtering, NAT, and port redirection. The engine behind iptables, nftables, and conntrack." },
           ],
         },
       ],
@@ -86,59 +353,19 @@ const LINUX_TREE: TreeNode = {
       label: "Core Libraries",
       sublabel: "Shared system layer",
       category: "library",
-      description:
-        "Shared libraries that every program on Linux links against. They bridge user-space code to kernel system calls and provide portable, optimised implementations of common algorithms.",
+      description: "Shared libraries every program links against. Bridge user-space code to kernel syscalls and provide optimised implementations of common algorithms.",
       children: [
-        {
-          id: "glibc",
-          label: "glibc",
-          sublabel: "GNU C Library",
-          category: "library",
-          description:
-            "The primary C standard library. Wraps kernel syscalls, implements POSIX APIs, provides dynamic linking, locale support, and the standard C runtime.",
-        },
+        { id: "glibc", label: "glibc", sublabel: "GNU C Library", category: "library", description: "Primary C standard library. Wraps kernel syscalls, implements POSIX APIs, provides dynamic linking, locale support, and the standard C runtime." },
         {
           id: "openssl",
           label: "OpenSSL",
           sublabel: "Cryptography & TLS",
           category: "highlight",
-          description:
-            "The most widely deployed cryptographic library on Linux. Implements TLS 1.0–1.3, a full suite of symmetric and asymmetric ciphers, X.509 certificate handling, and PKCS standards. Used by Apache, nginx, curl, git, OpenSSH, and thousands of packages.",
-          children: [
-            {
-              id: "libssl",
-              label: "libssl",
-              sublabel: "TLS / SSL protocol",
-              category: "highlight",
-              description:
-                "Implements the TLS handshake, session resumption, certificate chain validation, and cipher-suite negotiation. Supports TLS 1.3 with 0-RTT and post-quantum key exchange.",
-            },
-            {
-              id: "libcrypto",
-              label: "libcrypto",
-              sublabel: "Cryptographic primitives",
-              category: "highlight",
-              description:
-                "Core cryptographic engine. Provides AES-GCM, ChaCha20-Poly1305, RSA, ECDSA, X25519, SHA-2/3, HMAC, HKDF, and PKCS#11 hardware offload.",
-            },
-          ],
+          description: "Most widely deployed cryptographic library on Linux. Implements TLS 1.0–1.3, symmetric & asymmetric ciphers, X.509 certificates, and PKCS standards. Used by Apache, nginx, curl, git, OpenSSH, and thousands of packages.",
+          children: OPENSSL_CHILDREN,
         },
-        {
-          id: "libpthread",
-          label: "libpthread",
-          sublabel: "POSIX threads",
-          category: "library",
-          description:
-            "POSIX threading for Linux. Provides mutexes, condition variables, read-write locks, barriers, thread-local storage, and cancellation points.",
-        },
-        {
-          id: "libm",
-          label: "libm",
-          sublabel: "Math library",
-          category: "library",
-          description:
-            "Standard C floating-point library. Provides sin, cos, sqrt, pow, and 50+ other functions, optimised with SIMD instructions where available.",
-        },
+        { id: "libpthread", label: "libpthread", sublabel: "POSIX threads", category: "library", description: "POSIX threading for Linux. Provides mutexes, condition variables, read-write locks, barriers, thread-local storage, and cancellation points." },
+        { id: "libm", label: "libm", sublabel: "Math library", category: "library", description: "Standard C floating-point library. Provides sin, cos, sqrt, pow, and 50+ other functions, optimised with SIMD instructions where available." },
       ],
     },
     {
@@ -146,33 +373,11 @@ const LINUX_TREE: TreeNode = {
       label: "System Services",
       sublabel: "Runtime daemons",
       category: "service",
-      description:
-        "Long-running background processes that constitute the operational OS layer — init, IPC, logging, and remote access.",
+      description: "Long-running background processes — init, IPC, logging, and remote access.",
       children: [
-        {
-          id: "systemd",
-          label: "systemd",
-          sublabel: "Init system (PID 1)",
-          category: "service",
-          description:
-            "The first user-space process. Bootstraps all other services, manages their lifecycle, handles socket activation, mounts filesystems, and runs journald for structured logging.",
-        },
-        {
-          id: "dbus",
-          label: "D-Bus",
-          sublabel: "IPC message bus",
-          category: "service",
-          description:
-            "Message-passing system for inter-process communication. Lets processes expose structured APIs across process boundaries without shared memory or custom sockets.",
-        },
-        {
-          id: "openssh",
-          label: "OpenSSH",
-          sublabel: "Remote access (links OpenSSL)",
-          category: "service",
-          description:
-            "Secure shell daemon for encrypted remote terminal sessions and file transfer. Delegates all cryptographic operations to OpenSSL's libcrypto, making it directly dependent on OpenSSL's correctness.",
-        },
+        { id: "systemd", label: "systemd", sublabel: "Init system (PID 1)", category: "service", description: "First user-space process. Bootstraps all other services, manages lifecycle, handles socket activation, mounts filesystems, runs journald." },
+        { id: "dbus", label: "D-Bus", sublabel: "IPC message bus", category: "service", description: "Message-passing system for inter-process communication. Lets processes expose structured APIs across boundaries without shared memory." },
+        { id: "openssh", label: "OpenSSH", sublabel: "Remote access", category: "service", description: "Secure shell daemon for encrypted remote terminal sessions. Delegates all cryptographic operations to OpenSSL's libcrypto." },
       ],
     },
     {
@@ -180,33 +385,11 @@ const LINUX_TREE: TreeNode = {
       label: "User Space",
       sublabel: "Shell & tooling",
       category: "userspace",
-      description:
-        "The user-facing layer: the shell, fundamental command-line utilities, and the package manager that installs and tracks everything else.",
+      description: "The user-facing layer: the shell, fundamental CLI utilities, and the package manager.",
       children: [
-        {
-          id: "bash",
-          label: "GNU Bash",
-          sublabel: "Default shell",
-          category: "userspace",
-          description:
-            "Bourne Again Shell. Reads commands interactively or from scripts, manages job control, handles pipes and redirections, and exposes environment variables to child processes.",
-        },
-        {
-          id: "coreutils",
-          label: "GNU Coreutils",
-          sublabel: "Core utilities",
-          category: "userspace",
-          description:
-            "~100 fundamental tools: ls, cp, mv, rm, cat, grep, sort, wc, chmod. Every Linux system depends on these binaries from the very first boot.",
-        },
-        {
-          id: "apt",
-          label: "apt / dpkg",
-          sublabel: "Package manager",
-          category: "userspace",
-          description:
-            "Debian's package management system. apt fetches packages, resolves dependency graphs, and invokes dpkg which tracks the installed file manifest and handles upgrades atomically.",
-        },
+        { id: "bash", label: "GNU Bash", sublabel: "Default shell", category: "userspace", description: "Bourne Again Shell. Reads commands interactively or from scripts, manages job control, pipes, redirections, and environment variables." },
+        { id: "coreutils", label: "GNU Coreutils", sublabel: "Core utilities", category: "userspace", description: "~100 fundamental tools: ls, cp, mv, rm, cat, grep, sort, wc, chmod. Every Linux system depends on these from the very first boot." },
+        { id: "apt", label: "apt / dpkg", sublabel: "Package manager", category: "userspace", description: "Debian's package management system. apt fetches packages and resolves dependency graphs; dpkg tracks the installed file manifest." },
       ],
     },
   ],
@@ -262,26 +445,31 @@ const CATEGORY_STYLES: Record<NodeCategory, { bg: string; border: string; text: 
   highlight: { bg: "#c47a1e", border: "#9a5f10", text: "#fff8ee",  glow: "rgba(196,122,30,0.55)" },
   service:   { bg: "#7a3b6e", border: "#5e2c54", text: "#f5ecf4",  glow: "rgba(122,59,110,0.4)" },
   userspace: { bg: "#4a6b5a", border: "#354f41", text: "#eaf2ee",  glow: "rgba(74,107,90,0.4)" },
+  protocol:  { bg: "#1d5a8a", border: "#133f66", text: "#e4f0fb",  glow: "rgba(29,90,138,0.45)" },
+  crypto:    { bg: "#a05c14", border: "#7a430c", text: "#fff3e6",  glow: "rgba(160,92,20,0.5)" },
 };
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function allIds(node: TreeNode): string[] {
   return [node.id, ...(node.children ?? []).flatMap(allIds)];
 }
 const ALL_COLLAPSED = new Set(allIds(LINUX_TREE));
-const SCROLL_PAD = 24;
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export function SystemDiagram() {
   const [collapsed, setCollapsed] = useState<Set<string>>(ALL_COLLAPSED);
   const containerRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
-  const [offsetX, setOffsetX] = useState(0);
+  const containerSize = useRef({ w: 0, h: 0 });
+  const collapsedRef = useRef(collapsed);
+  const prevRenderedIds = useRef<Set<string>>(new Set());
+
+  const [zoomTarget, setZoomTarget] = useState<string | null>(null);
+  const [transform, setTransform] = useState({ tx: 0, ty: 24, s: 1 });
   const [hoveredId, setHoveredId] = useState<string | null>(null);
 
-  // Track which node IDs were rendered in the previous layout so new nodes
-  // can receive an enter animation class.
-  const prevRenderedIds = useRef<Set<string>>(new Set());
+  useEffect(() => { collapsedRef.current = collapsed; }, [collapsed]);
 
   const nodes = useMemo<PositionedNode[]>(() => {
     const out: PositionedNode[] = [];
@@ -289,7 +477,6 @@ export function SystemDiagram() {
     return out;
   }, [collapsed]);
 
-  // Snapshot the current rendered IDs after every layout change.
   useLayoutEffect(() => {
     prevRenderedIds.current = new Set(nodes.map((n) => n.node.id));
   }, [nodes]);
@@ -300,36 +487,78 @@ export function SystemDiagram() {
     return maxY + NODE_H + 40;
   }, [nodes]);
 
-  useEffect(() => {
-    const el = containerRef.current;
-    if (!el) return;
-    const update = () => {
-      const { width, height } = el.getBoundingClientRect();
-      if (totalW > 0 && totalH > 0) {
-        const s = Math.min(width / totalW, (height - 32) / totalH, 1);
-        setScale(s);
-        setOffsetX(Math.max(0, (width - totalW * s) / 2));
-      }
-    };
-    update();
-    const obs = new ResizeObserver(update);
-    obs.observe(el);
-    return () => obs.disconnect();
-  }, [totalW, totalH]);
-
   const posMap = useMemo(() => {
     const m = new Map<string, PositionedNode>();
     nodes.forEach((n) => m.set(n.node.id, n));
     return m;
   }, [nodes]);
 
-  const toggleCollapse = useCallback((id: string) => {
+  // ── Transform computation ─────────────────────────────────────────────────
+
+  const computeTransform = useCallback(() => {
+    const { w, h } = containerSize.current;
+    if (!w || !h) return;
+
+    if (!zoomTarget) {
+      // Fit all
+      const s = Math.min(w / totalW, h / totalH, 1);
+      setTransform({ tx: Math.max(0, (w - totalW * s) / 2), ty: 24, s });
+      return;
+    }
+
+    const focusPos = posMap.get(zoomTarget);
+    if (!focusPos) {
+      const s = Math.min(w / totalW, h / totalH, 1);
+      setTransform({ tx: Math.max(0, (w - totalW * s) / 2), ty: 24, s });
+      return;
+    }
+
+    // Bounding box: the expanded node + its direct children
+    const children = nodes.filter((n) => n.parentId === zoomTarget);
+    const all = [focusPos, ...children];
+    const PAD = 56;
+    const x0 = Math.min(...all.map((n) => n.x - NODE_W / 2)) - PAD;
+    const x1 = Math.max(...all.map((n) => n.x + NODE_W / 2)) + PAD;
+    const y0 = focusPos.y - PAD;
+    const y1 = Math.max(...all.map((n) => n.y + NODE_H)) + PAD;
+
+    const s = Math.min(w / (x1 - x0), h / (y1 - y0), 2.8);
+    const cx = (x0 + x1) / 2;
+    const cy = (y0 + y1) / 2;
+
+    setTransform({ tx: w / 2 - cx * s, ty: h / 2 - cy * s, s });
+  }, [zoomTarget, totalW, totalH, posMap, nodes]);
+
+  useEffect(() => { computeTransform(); }, [computeTransform]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const obs = new ResizeObserver(() => {
+      const { width, height } = el.getBoundingClientRect();
+      containerSize.current = { w: width, h: height };
+      computeTransform();
+    });
+    const { width, height } = el.getBoundingClientRect();
+    containerSize.current = { w: width, h: height };
+    computeTransform();
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [computeTransform]);
+
+  // ── Interaction ───────────────────────────────────────────────────────────
+
+  const handleToggle = useCallback((id: string) => {
+    const wasCollapsed = collapsedRef.current.has(id);
     setCollapsed((prev) => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      wasCollapsed ? next.delete(id) : next.add(id);
       return next;
     });
+    setZoomTarget(wasCollapsed ? id : null);
   }, []);
+
+  // ── SVG paths ─────────────────────────────────────────────────────────────
 
   const svgPaths = useMemo(() => {
     return nodes
@@ -337,47 +566,42 @@ export function SystemDiagram() {
       .map((n) => {
         const parent = posMap.get(n.parentId!);
         if (!parent) return null;
-        const x1 = parent.x;
-        const y1 = parent.y + NODE_H;
-        const x2 = n.x;
-        const y2 = n.y;
+        const x1 = parent.x, y1 = parent.y + NODE_H;
+        const x2 = n.x,     y2 = n.y;
         const cy = (y1 + y2) / 2;
+        const isHighlight = n.node.category === "highlight" || n.node.category === "crypto";
         return (
           <path
             key={`${n.parentId}-${n.node.id}`}
             d={`M${x1},${y1} C${x1},${cy} ${x2},${cy} ${x2},${y2}`}
             fill="none"
-            stroke={n.node.category === "highlight" ? "rgba(196,122,30,0.5)" : "rgba(29,40,38,0.18)"}
-            strokeWidth={n.node.category === "highlight" ? 2 : 1.5}
+            stroke={isHighlight ? "rgba(196,122,30,0.45)" : "rgba(29,40,38,0.16)"}
+            strokeWidth={isHighlight ? 2 : 1.5}
           />
         );
       });
   }, [nodes, posMap]);
 
-  // Compute tooltip position in diagram-shell coordinates.
+  // ── Hover tooltip position ────────────────────────────────────────────────
+
   const tooltip = useMemo(() => {
     if (!hoveredId) return null;
     const pos = posMap.get(hoveredId);
     const entry = nodes.find((n) => n.node.id === hoveredId);
     if (!pos || !entry) return null;
-    const nodeRightInShell = (pos.x + NODE_W / 2) * scale + offsetX + SCROLL_PAD;
-    const nodeTopInShell = pos.y * scale + SCROLL_PAD;
-    return { node: entry.node, x: nodeRightInShell + 12, y: nodeTopInShell };
-  }, [hoveredId, posMap, nodes, scale, offsetX]);
+    const { tx, ty, s } = transform;
+    const nodeRightX = (pos.x + NODE_W / 2) * s + tx;
+    const nodeTopY = pos.y * s + ty;
+    return { node: entry.node, x: nodeRightX + 12, y: nodeTopY };
+  }, [hoveredId, posMap, nodes, transform]);
+
+  // ── Render ────────────────────────────────────────────────────────────────
 
   return (
     <div className="diagram-shell">
-
-      {/* Hover tooltip — rendered outside the scaled canvas so it's never clipped */}
       {tooltip && (
-        <div
-          className="diagram-tooltip"
-          style={{ left: tooltip.x, top: tooltip.y }}
-        >
-          <div
-            className="diagram-tooltip-badge"
-            style={{ background: CATEGORY_STYLES[tooltip.node.category].bg }}
-          >
+        <div className="diagram-tooltip" style={{ left: tooltip.x, top: tooltip.y }}>
+          <div className="diagram-tooltip-badge" style={{ background: CATEGORY_STYLES[tooltip.node.category].bg }}>
             {tooltip.node.label}
           </div>
           <p className="diagram-tooltip-sub">{tooltip.node.sublabel}</p>
@@ -385,16 +609,14 @@ export function SystemDiagram() {
         </div>
       )}
 
-      {/* Tree canvas */}
       <div className="diagram-scroll" ref={containerRef}>
         <div
           className="diagram-canvas"
           style={{
             width: totalW,
             height: totalH,
-            transform: `scale(${scale})`,
-            transformOrigin: "top left",
-            marginLeft: offsetX,
+            transform: `translate(${transform.tx}px, ${transform.ty}px) scale(${transform.s})`,
+            transformOrigin: "0 0",
           }}
         >
           <svg
@@ -414,7 +636,7 @@ export function SystemDiagram() {
             return (
               <button
                 key={node.id}
-                className={`diagram-node${node.category === "highlight" ? " highlighted" : ""}${isNew ? " entering" : ""}`}
+                className={`diagram-node${node.category === "highlight" || node.category === "crypto" ? " highlighted" : ""}${isNew ? " entering" : ""}`}
                 style={{
                   left: x - NODE_W / 2,
                   top: y,
@@ -425,10 +647,9 @@ export function SystemDiagram() {
                   color: style.text,
                   "--glow": style.glow,
                 } as React.CSSProperties}
-                onClick={() => { if (node.children) toggleCollapse(node.id); }}
+                onClick={() => { if (node.children) handleToggle(node.id); }}
                 onMouseEnter={() => setHoveredId(node.id)}
                 onMouseLeave={() => setHoveredId(null)}
-                title={node.children ? (isCollapsed ? "Expand" : "Collapse") : undefined}
               >
                 <span className="diagram-node-label">{node.label}</span>
                 <span className="diagram-node-sub">{node.sublabel}</span>
