@@ -1,4 +1,4 @@
-import { Activity, Radio, Wifi, WifiOff } from "lucide-react";
+import { Activity, Radio, RotateCcw, Wifi, WifiOff } from "lucide-react";
 import type { AgentStatusEvent } from "../ws/types";
 import { Transcript, type TranscriptLine } from "./Transcript";
 
@@ -7,9 +7,10 @@ type StatusPanelProps = {
   transcript: TranscriptLine[];
   isAudioPlaying: boolean;
   connectionStatus: "connecting" | "open" | "closed";
+  onClearTranscript: () => void;
 };
 
-export function StatusPanel({ status, transcript, isAudioPlaying, connectionStatus }: StatusPanelProps) {
+export function StatusPanel({ status, transcript, isAudioPlaying, connectionStatus, onClearTranscript }: StatusPanelProps) {
   const isConnected = connectionStatus === "open";
 
   return (
@@ -22,6 +23,9 @@ export function StatusPanel({ status, transcript, isAudioPlaying, connectionStat
           <h1>GuardRail</h1>
           <p>{status?.phase ?? "IDLE"} {status?.tool ? `- ${status.tool}` : ""}</p>
         </div>
+        <button className="icon-button clear-chat" type="button" onClick={onClearTranscript} title="Clear chat">
+          <RotateCcw size={15} />
+        </button>
         <div className={`connection ${isConnected ? "open" : "closed"}`} title={connectionStatus}>
           {isConnected ? <Wifi size={17} /> : <WifiOff size={17} />}
         </div>

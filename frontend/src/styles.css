@@ -208,11 +208,25 @@ button {
   font-size: 12px;
 }
 
+.clear-chat {
+  width: 30px;
+  height: 30px;
+  margin-left: auto;
+  color: #65726f;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+}
+
+.clear-chat:hover {
+  color: #223836;
+  background: rgba(238, 242, 239, 0.94);
+}
+
 .connection {
   display: grid;
   width: 30px;
   height: 30px;
-  margin-left: auto;
   place-items: center;
   border-radius: 8px;
 }
