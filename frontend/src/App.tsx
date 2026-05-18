@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { FileUpload, type UploadedFile } from "./components/FileUpload";
 import { StatusPanel } from "./components/StatusPanel";
 import { StudentControls } from "./components/StudentControls";
+import { SystemDiagram } from "./components/SystemDiagram";
 import type { TranscriptLine } from "./components/Transcript";
 import { useAudioPlayer } from "./hooks/useAudioPlayer";
 import { useWebSocket } from "./hooks/useWebSocket";
@@ -79,6 +80,9 @@ function App() {
 
   return (
     <div className="app-shell">
+      <div className="main-content">
+        <SystemDiagram />
+      </div>
       <div className="right-panel">
         <StatusPanel
           status={agentStatus}

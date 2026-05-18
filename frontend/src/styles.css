@@ -142,6 +142,13 @@ button {
   font-weight: 700;
 }
 
+.main-content {
+  position: absolute;
+  inset: 0;
+  right: min(480px, calc(100vw - 40px));
+  overflow: hidden;
+}
+
 .right-panel {
   position: absolute;
   top: 0;
@@ -464,6 +471,11 @@ button {
 }
 
 @media (max-width: 760px) {
+  .main-content {
+    right: 0;
+    bottom: 48vh;
+  }
+
   .right-panel {
     top: auto;
     right: 0;
@@ -479,4 +491,147 @@ button {
   .camera-readout {
     display: none;
   }
+}
+
+/* ─── System Diagram ─────────────────────────────────────────────────────────── */
+
+.diagram-shell {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background:
+    linear-gradient(rgba(31, 122, 107, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(31, 122, 107, 0.06) 1px, transparent 1px),
+    #edf1ef;
+  background-size: 60px 60px;
+}
+
+.diagram-info {
+  flex-shrink: 0;
+  margin: 20px 24px 0;
+  padding: 16px 18px;
+  border: 1px solid rgba(29, 40, 38, 0.1);
+  border-radius: 10px;
+  background: rgba(251, 251, 248, 0.9);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 4px 20px rgba(18, 35, 32, 0.08);
+}
+
+.diagram-info-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 6px;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.2px;
+}
+
+.diagram-info-sub {
+  margin: 6px 0 0;
+  color: #65726f;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.diagram-info-desc {
+  margin: 8px 0 0;
+  color: #223836;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.diagram-info-hint {
+  margin: 8px 0 0;
+  color: #1f7a6b;
+  font-size: 12px;
+  font-style: italic;
+}
+
+.diagram-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px;
+}
+
+.diagram-canvas {
+  position: relative;
+}
+
+.diagram-svg {
+  overflow: visible;
+}
+
+.diagram-node {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 0 10px;
+  border: 1.5px solid;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: box-shadow 160ms ease, transform 120ms ease;
+  text-align: left;
+  line-height: 1.2;
+}
+
+.diagram-node:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px var(--glow, rgba(0,0,0,0.2));
+}
+
+.diagram-node.selected {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.6), 0 6px 24px var(--glow, rgba(0,0,0,0.3));
+  transform: translateY(-1px);
+}
+
+.diagram-node.highlighted {
+  box-shadow: 0 4px 16px var(--glow, rgba(196,122,30,0.4));
+}
+
+.diagram-node.highlighted.selected {
+  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7), 0 6px 28px var(--glow, rgba(196,122,30,0.6));
+}
+
+.diagram-node-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.1px;
+}
+
+.diagram-node-sub {
+  font-size: 10px;
+  opacity: 0.72;
+  font-weight: 500;
+}
+
+.diagram-node-toggle {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.18);
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  color: inherit;
+  cursor: pointer;
+  transition: background 120ms;
+  user-select: none;
+}
+
+.diagram-node-toggle:hover {
+  background: rgba(0, 0, 0, 0.32);
 }
