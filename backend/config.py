@@ -8,10 +8,9 @@ env_path = Path(__file__).resolve().with_name(".env")
 
 class Settings(BaseSettings):
     local_storage_dir: str = "backend/local_data"
-    gemini_api_key: str | None = None
-    gemini_text_model: str = "gemini-2.5-flash"
-    gemini_image_model: str = "gemini-2.5-flash-image"
-    gemini_enabled: bool = True
+    knowledge_base_dir: str = "backend/knowledge_base"
+    anthropic_api_key: str | None = None
+    claude_model: str = "claude-sonnet-4-6"
     frontend_origin: str = "http://localhost:5173"
 
     model_config = SettingsConfigDict(env_file=env_path, env_file_encoding="utf-8", extra="ignore")
