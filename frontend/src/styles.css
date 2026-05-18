@@ -108,8 +108,10 @@ button {
 }
 
 .empty-equation {
-  font-size: 64px;
+  font-size: 36px;
   font-weight: 750;
+  opacity: 0.35;
+  letter-spacing: -0.5px;
 }
 
 .ink-layer,

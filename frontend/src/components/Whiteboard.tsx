@@ -19,7 +19,7 @@ type WhiteboardProps = {
 
 export function Whiteboard({ wrapperStyle, camera, imageUri, inkAssets, pointer }: WhiteboardProps) {
   return (
-    <main className="stage" aria-label="AI tutor whiteboard">
+    <main className="stage" aria-label="System diagram">
       <WrapperLayer style={wrapperStyle}>
         <div className="board-surface">
           <ImageLayer imageUri={imageUri} />

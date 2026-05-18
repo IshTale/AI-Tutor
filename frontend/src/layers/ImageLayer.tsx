@@ -29,7 +29,7 @@ export function ImageLayer({ imageUri }: ImageLayerProps) {
       ) : (
         <div className="empty-board">
           <div className="grid-plane" />
-          <div className="empty-equation">f(x) = ax^2 + bx + c</div>
+          <div className="empty-equation">Ask GuardRail to explore your system architecture</div>
         </div>
       )}
     </div>

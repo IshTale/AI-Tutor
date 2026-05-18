@@ -14,7 +14,7 @@ export function StatusPanel({ status, transcript, isAudioPlaying, connectionStat
   const isConnected = connectionStatus === "open";
 
   return (
-    <aside className="status-panel" aria-label="AI tutor status">
+    <aside className="status-panel" aria-label="GuardRail status">
       <div className="status-header">
         <div className="agent-mark">
           <Activity size={18} />
@@ -41,9 +41,9 @@ export function StatusPanel({ status, transcript, isAudioPlaying, connectionStat
         <div>
           <p className="activity-label">
             <Radio size={14} />
-            Agent Activity
+            System Activity
           </p>
-          <p className="activity-message">{status?.message ?? "Waiting for a student prompt."}</p>
+          <p className="activity-message">{status?.message ?? "Ready. Ask me about your systems."}</p>
         </div>
       </div>
 
