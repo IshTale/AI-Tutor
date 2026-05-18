@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
@@ -212,6 +212,47 @@ const LINUX_TREE: TreeNode = {
   ],
 };
 
+// ─── Layout ───────────────────────────────────────────────────────────────────
+
+const NODE_W = 164;
+const NODE_H = 52;
+const H_GAP = 28;
+const V_GAP = 80;
+
+type PositionedNode = {
+  node: TreeNode;
+  x: number;
+  y: number;
+  parentId: string | null;
+};
+
+function subtreeWidth(node: TreeNode, collapsed: Set<string>): number {
+  if (!node.children || collapsed.has(node.id)) return NODE_W + H_GAP;
+  const sum = node.children.reduce((acc, c) => acc + subtreeWidth(c, collapsed), 0);
+  return Math.max(NODE_W + H_GAP, sum);
+}
+
+function layout(
+  node: TreeNode,
+  depth: number,
+  leftEdge: number,
+  collapsed: Set<string>,
+  parentId: string | null,
+  out: PositionedNode[],
+): void {
+  const sw = subtreeWidth(node, collapsed);
+  const cx = leftEdge + sw / 2;
+  out.push({ node, x: cx, y: depth * (NODE_H + V_GAP), parentId });
+
+  if (node.children && !collapsed.has(node.id)) {
+    let childLeft = leftEdge;
+    for (const child of node.children) {
+      layout(child, depth + 1, childLeft, collapsed, node.id, out);
+      childLeft += subtreeWidth(child, collapsed);
+    }
+  }
+}
+
 // ─── Category colours ────────────────────────────────────────────────────────
 
 const CATEGORY_STYLES: Record<NodeCategory, { bg: string; border: string; text: string; glow: string }> = {
@@ -223,93 +264,90 @@ const CATEGORY_STYLES: Record<NodeCategory, { bg: string; border: string; text: 
   userspace: { bg: "#4a6b5a", border: "#354f41", text: "#eaf2ee",  glow: "rgba(74,107,90,0.4)" },
 };
 
-// ─── Tree node component ──────────────────────────────────────────────────────
+// ─── Component ────────────────────────────────────────────────────────────────
 
-type TreeItemProps = {
-  node: TreeNode;
-  depth: number;
-  expanded: Set<string>;
-  selected: TreeNode | null;
-  onSelect: (node: TreeNode) => void;
-  onToggle: (id: string) => void;
-};
-
-function TreeItem({ node, depth, expanded, selected, onSelect, onToggle }: TreeItemProps) {
-  const isExpanded = expanded.has(node.id);
-  const isSelected = selected?.id === node.id;
-  const hasChildren = !!node.children;
-  const style = CATEGORY_STYLES[node.category];
-
-  return (
-    <div className="tree-item">
-      <button
-        className={`tree-card${isSelected ? " selected" : ""}${node.category === "highlight" ? " highlighted" : ""}`}
-        style={{
-          marginLeft: depth * 20,
-          background: style.bg,
-          borderColor: style.border,
-          color: style.text,
-          "--glow": style.glow,
-        } as React.CSSProperties}
-        onClick={() => {
-          onSelect(node);
-          if (hasChildren) onToggle(node.id);
-        }}
-      >
-        <div className="tree-card-body">
-          <span className="tree-card-label">{node.label}</span>
-          <span className="tree-card-sub">{node.sublabel}</span>
-        </div>
-        {hasChildren && (
-          <span className="tree-card-toggle">{isExpanded ? "−" : "+"}</span>
-        )}
-      </button>
-
-      {hasChildren && isExpanded && (
-        <div className="tree-children" style={{ marginLeft: depth * 20 }}>
-          {node.children!.map((child) => (
-            <TreeItem
-              key={child.id}
-              node={child}
-              depth={depth + 1}
-              expanded={expanded}
-              selected={selected}
-              onSelect={onSelect}
-              onToggle={onToggle}
-            />
-          ))}
-        </div>
-      )}
-    </div>
-  );
+// Start with everything collapsed — only the root is visible
+function allIds(node: TreeNode): string[] {
+  return [node.id, ...(node.children ?? []).flatMap(allIds)];
 }
-
-// ─── Root component ───────────────────────────────────────────────────────────
+const ALL_COLLAPSED = new Set(allIds(LINUX_TREE));
 
 export function SystemDiagram() {
-  const [expanded, setExpanded] = useState<Set<string>>(new Set());
-  const [selected, setSelected] = useState<TreeNode | null>(null);
+  const [collapsed, setCollapsed] = useState<Set<string>>(ALL_COLLAPSED);
+  const [selected, setSelected] = useState<TreeNode | null>(LINUX_TREE);
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const [offsetX, setOffsetX] = useState(0);
 
-  const onToggle = (id: string) => {
-    setExpanded((prev) => {
+  const nodes = useMemo<PositionedNode[]>(() => {
+    const out: PositionedNode[] = [];
+    layout(LINUX_TREE, 0, 0, collapsed, null, out);
+    return out;
+  }, [collapsed]);
+
+  const totalW = useMemo(() => subtreeWidth(LINUX_TREE, collapsed), [collapsed]);
+  const totalH = useMemo(() => {
+    const maxY = Math.max(...nodes.map((n) => n.y));
+    return maxY + NODE_H + 40;
+  }, [nodes]);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const update = () => {
+      const { width, height } = el.getBoundingClientRect();
+      if (totalW > 0 && totalH > 0) {
+        const s = Math.min(width / totalW, (height - 32) / totalH, 1);
+        setScale(s);
+        setOffsetX(Math.max(0, (width - totalW * s) / 2));
+      }
+    };
+    update();
+    const obs = new ResizeObserver(update);
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [totalW, totalH]);
+
+  const posMap = useMemo(() => {
+    const m = new Map<string, PositionedNode>();
+    nodes.forEach((n) => m.set(n.node.id, n));
+    return m;
+  }, [nodes]);
+
+  const toggleCollapse = useCallback((id: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setCollapsed((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
-  };
+  }, []);
+
+  const svgPaths = useMemo(() => {
+    return nodes
+      .filter((n) => n.parentId !== null)
+      .map((n) => {
+        const parent = posMap.get(n.parentId!);
+        if (!parent) return null;
+        const x1 = parent.x;
+        const y1 = parent.y + NODE_H;
+        const x2 = n.x;
+        const y2 = n.y;
+        const cy = (y1 + y2) / 2;
+        return (
+          <path
+            key={`${n.parentId}-${n.node.id}`}
+            d={`M${x1},${y1} C${x1},${cy} ${x2},${cy} ${x2},${y2}`}
+            fill="none"
+            stroke={n.node.category === "highlight" ? "rgba(196,122,30,0.5)" : "rgba(29,40,38,0.18)"}
+            strokeWidth={n.node.category === "highlight" ? 2 : 1.5}
+          />
+        );
+      });
+  }, [nodes, posMap]);
 
   return (
     <div className="diagram-shell">
-
-      {/* Header */}
-      <div className="diagram-header">
-        <div className="diagram-header-dot" />
-        <div>
-          <p className="diagram-header-title">Linux Architecture</p>
-          <p className="diagram-header-sub">Click any component to expand</p>
-        </div>
-      </div>
-
       {/* Info panel */}
       {selected && (
         <div className="diagram-info">
@@ -321,24 +359,74 @@ export function SystemDiagram() {
           </div>
           <p className="diagram-info-sub">{selected.sublabel}</p>
           <p className="diagram-info-desc">{selected.description}</p>
+          {selected.children && (
+            <p className="diagram-info-hint">
+              {collapsed.has(selected.id) ? "Click + to expand children" : "Click − to collapse"}
+            </p>
+          )}
         </div>
       )}
 
-      {/* Tree */}
-      <div className="diagram-tree">
-        {LINUX_TREE.children!.map((node) => (
-          <TreeItem
-            key={node.id}
-            node={node}
-            depth={0}
-            expanded={expanded}
-            selected={selected}
-            onSelect={setSelected}
-            onToggle={onToggle}
-          />
-        ))}
-      </div>
+      {/* Tree canvas */}
+      <div className="diagram-scroll" ref={containerRef}>
+        <div
+          className="diagram-canvas"
+          style={{
+            width: totalW,
+            height: totalH,
+            transform: `scale(${scale})`,
+            transformOrigin: "top left",
+            marginLeft: offsetX,
+          }}
+        >
+          <svg
+            className="diagram-svg"
+            width={totalW}
+            height={totalH}
+            style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
+          >
+            {svgPaths}
+          </svg>
 
+          {nodes.map(({ node, x, y }) => {
+            const style = CATEGORY_STYLES[node.category];
+            const isSelected = selected?.id === node.id;
+            const hasChildren = !!node.children;
+            const isCollapsed = collapsed.has(node.id);
+
+            return (
+              <button
+                key={node.id}
+                className={`diagram-node${isSelected ? " selected" : ""}${node.category === "highlight" ? " highlighted" : ""}`}
+                style={{
+                  left: x - NODE_W / 2,
+                  top: y,
+                  width: NODE_W,
+                  height: NODE_H,
+                  background: style.bg,
+                  borderColor: style.border,
+                  color: style.text,
+                  "--glow": style.glow,
+                } as React.CSSProperties}
+                onClick={() => setSelected(node)}
+              >
+                <span className="diagram-node-label">{node.label}</span>
+                <span className="diagram-node-sub">{node.sublabel}</span>
+                {hasChildren && (
+                  <span
+                    className="diagram-node-toggle"
+                    role="button"
+                    onClick={(e) => toggleCollapse(node.id, e)}
+                    title={isCollapsed ? "Expand" : "Collapse"}
+                  >
+                    {isCollapsed ? "+" : "−"}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      </div>
     </div>
   );
 }
