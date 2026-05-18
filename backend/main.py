@@ -23,7 +23,7 @@ from backend.tools.reason_tool import ReasonTool
 from backend.tools.registry import ToolRegistry
 from backend.tools.run_script_tool import RunScriptTool
 from backend.tools.speak_tool import SpeakTool
-from backend.ws.event_models import AgentStatusEvent
+from backend.ws.event_models import AgentStatusEvent, TutorSpeakEvent
 from backend.ws.websocket_server import WebSocketHub
 
 
@@ -100,7 +100,18 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
     await hub.connect(client_id, websocket, last_seq)
     await hub.send_event(
         client_id,
-        AgentStatusEvent(phase="IDLE", message="Connected to OpenClaw backend."),
+        AgentStatusEvent(phase="IDLE", message="Connected to GuardRail."),
+    )
+    await hub.send_event(
+        client_id,
+        TutorSpeakEvent(
+            transcript=(
+                "Hi, I'm GuardRail. My job is to help you understand how your technology operates — "
+                "specifically the architecture and inner workings of your legacy systems. "
+                "I have access to your systems' information and can walk you through how everything connects. "
+                "Ask me anything."
+            ),
+        ),
     )
 
     try:
