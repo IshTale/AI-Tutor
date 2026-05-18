@@ -37,13 +37,13 @@ export function StudentControls({ onSendText, onPushToTalk, onInterrupt }: Stude
   };
 
   return (
-    <div className="student-controls" aria-label="Student controls">
+    <div className="student-controls" aria-label="User controls">
       <button
         className={`icon-button talk ${isListening ? "active" : ""}`}
         type="button"
         onClick={toggleTalk}
         disabled={!supported}
-        title={supported ? (isListening ? "Stop listening" : "Push to talk") : "Speech not supported in this browser"}
+        title={supported ? (isListening ? "Stop recording" : "Ask GuardRail by voice") : "Speech not supported in this browser"}
       >
         {isListening ? <MicOff size={20} /> : <Mic size={20} />}
       </button>
@@ -54,8 +54,8 @@ export function StudentControls({ onSendText, onPushToTalk, onInterrupt }: Stude
         <input
           value={isListening ? "Listening..." : text}
           onChange={(event) => setText(event.target.value)}
-          placeholder="Ask a follow-up..."
-          aria-label="Ask the tutor"
+          placeholder="Ask about your systems..."
+          aria-label="Ask GuardRail"
           readOnly={isListening}
         />
         <button className="send-button" type="submit" disabled={isListening} title="Send">
