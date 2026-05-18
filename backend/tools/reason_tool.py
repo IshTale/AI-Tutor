@@ -2,7 +2,7 @@ from pathlib import Path
 
 from backend.config import Settings
 from backend.tools.base import BaseTool, ToolResult
-from backend.tools.claude_client import ClaudeClient
+from backend.tools.gemini_client import GeminiClient
 
 
 def _load_knowledge_base(kb_dir: str) -> str:
@@ -12,6 +12,8 @@ def _load_knowledge_base(kb_dir: str) -> str:
         return ""
     docs = []
     for md_file in sorted(path.glob("**/*.md")):
+        if md_file.name.lower() == "readme.md":
+            continue
         content = md_file.read_text(encoding="utf-8").strip()
         if content:
             docs.append(f"### {md_file.stem}\n\n{content}")
@@ -21,8 +23,8 @@ def _load_knowledge_base(kb_dir: str) -> str:
 class ReasonTool(BaseTool):
     name = "reason"
 
-    def __init__(self, claude: ClaudeClient, settings: Settings) -> None:
-        self.claude = claude
+    def __init__(self, gemini: GeminiClient, settings: Settings) -> None:
+        self.gemini = gemini
         self._kb = _load_knowledge_base(settings.knowledge_base_dir)
 
     async def invoke(self, payload: dict) -> ToolResult:
@@ -45,5 +47,5 @@ class ReasonTool(BaseTool):
                 + self._kb
             )
 
-        text = await self.claude.generate_text(prompt, system="\n\n".join(system_parts))
+        text = await self.gemini.generate_text(prompt, system="\n\n".join(system_parts))
         return ToolResult(tool=self.name, payload={"text": text})

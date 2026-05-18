@@ -1,8 +1,12 @@
+import logging
+import traceback
 from pathlib import Path
 from uuid import uuid4
 
-from fastapi import FastAPI, File, UploadFile, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, File, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
+
+logger = logging.getLogger(__name__)
 from fastapi.staticfiles import StaticFiles
 
 from backend.config import get_settings
@@ -16,8 +20,8 @@ from backend.security.rate_limiter import RateLimiter
 from backend.security.sandbox import DockerSandbox
 from backend.tools.animate_tool import AnimateTool
 from backend.tools.browse_tool import BrowseTool
-from backend.tools.claude_client import ClaudeClient
 from backend.tools.fetch_file_tool import FetchFileTool
+from backend.tools.gemini_client import GeminiClient
 from backend.tools.generate_tool import GenerateTool
 from backend.tools.reason_tool import ReasonTool
 from backend.tools.registry import ToolRegistry
@@ -30,17 +34,17 @@ from backend.ws.websocket_server import WebSocketHub
 settings = get_settings()
 assets = AssetStore(settings)
 sessions = SessionStore(settings)
-claude = ClaudeClient(settings)
+gemini = GeminiClient(settings)
 hub = WebSocketHub()
-merger = Merger(hub)
+merger = Merger(hub, gemini, assets)
 
 
 def build_tool_registry() -> ToolRegistry:
     registry = ToolRegistry()
     sanitizer = PromptSanitizer()
     sandbox = DockerSandbox()
-    registry.register(ReasonTool(claude, settings))
-    registry.register(GenerateTool(assets))
+    registry.register(ReasonTool(gemini, settings))
+    registry.register(GenerateTool(gemini, assets))
     registry.register(SpeakTool())
     registry.register(AnimateTool())
     registry.register(FetchFileTool(sanitizer, assets))
@@ -75,8 +79,7 @@ async def health() -> dict:
         "tools": tools.names,
         "storage": "local",
         "local_storage_dir": settings.local_storage_dir,
-        "claude_enabled": claude.enabled,
-        "claude_model": settings.claude_model,
+        "gemini_enabled": gemini.enabled,
     }
 
 
@@ -90,6 +93,23 @@ async def upload_file(file: UploadFile = File(...)) -> dict:
         "size": len(data),
         "mime_type": file.content_type or "application/octet-stream",
     }
+
+
+@app.get("/test-tts")
+async def test_tts(text: str = "Hello, this is a test of Gemini text to speech.") -> dict:
+    import base64
+    wav_bytes = await gemini.generate_speech_bytes(text)
+    if not wav_bytes:
+        return {"ok": False, "error": "No audio returned"}
+    return {"ok": True, "bytes": len(wav_bytes), "audio_url": f"data:audio/wav;base64,{base64.b64encode(wav_bytes).decode()}"}
+
+
+@app.post("/transcribe")
+async def transcribe_audio(request: Request) -> dict:
+    audio_bytes = await request.body()
+    mime_type = request.headers.get("content-type", "audio/webm")
+    transcript = await gemini.transcribe_audio(audio_bytes, mime_type)
+    return {"transcript": transcript}
 
 
 @app.websocket("/ws")
@@ -133,12 +153,16 @@ async def websocket_endpoint(websocket: WebSocket) -> None:
                     client_id,
                     AgentStatusEvent(phase="REASON", message="Planning the tool graph."),
                 )
-                result = await agent.handle_student_text(
-                    session_id=session_id,
-                    text=text,
-                    selected_file_id=message.get("selectedFileId"),
-                )
-                await merger.dispatch(client_id, result["results"])
+                try:
+                    result = await agent.handle_student_text(
+                        session_id=session_id,
+                        text=text,
+                        selected_file_id=message.get("selectedFileId"),
+                    )
+                    await merger.dispatch(client_id, result["results"])
+                except Exception as exc:
+                    logger.error("Agent error: %s\n%s", exc, traceback.format_exc())
+                    await hub.send_event(client_id, TutorSpeakEvent(transcript=f"Sorry, something went wrong: {exc}"))
 
             elif message_type == "push_to_talk":
                 active = bool(message.get("active"))

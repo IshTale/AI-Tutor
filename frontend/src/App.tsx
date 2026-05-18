@@ -12,7 +12,7 @@ const apiBaseUrl = import.meta.env.VITE_AI_TUTOR_API_URL ?? "http://localhost:80
 
 function App() {
   const { connectionStatus, sendMessage, onEvent } = useWebSocket();
-  const { enqueue, isPlaying, cancel } = useAudioPlayer();
+  const { enqueue, unlock, isPlaying, cancel } = useAudioPlayer();
 
   const [agentStatus, setAgentStatus] = useState<AgentStatusEvent | null>(null);
   const [transcript, setTranscript] = useState<TranscriptLine[]>([]);
@@ -33,14 +33,17 @@ function App() {
     () =>
       onEvent("tutor_speak", (event: TutorSpeakEvent) => {
         if (event.transcript) {
-          enqueue(event.transcript);
           addTranscript(event.speaker ?? "tutor", event.transcript);
+        }
+        if (event.audio_url) {
+          enqueue(event.audio_url);
         }
       }),
     [addTranscript, enqueue, onEvent],
   );
 
   const handleSendText = (text: string) => {
+    unlock(); // unlock AudioContext during user gesture so Gemini audio can play
     addTranscript("student", text);
     sendMessage({ type: "student_text", text, selectedFileId: selectedFile?.id });
     setAgentStatus({
@@ -94,7 +97,7 @@ function App() {
         <FileUpload files={files} selectedFileId={selectedFileId} onUpload={handleUpload} onSelect={handleSelectFile} />
         <StudentControls
           onSendText={handleSendText}
-          onPushToTalk={(active) => sendMessage({ type: "push_to_talk", active, selectedFileId: selectedFile?.id })}
+          onPushToTalk={(active) => { unlock(); sendMessage({ type: "push_to_talk", active, selectedFileId: selectedFile?.id }); }}
           onInterrupt={() => { cancel(); sendMessage({ type: "interrupt" }); }}
         />
       </div>
