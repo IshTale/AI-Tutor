@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useState } from "react";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
@@ -212,119 +212,74 @@ const LINUX_TREE: TreeNode = {
   ],
 };
 
-// ─── Layout ───────────────────────────────────────────────────────────────────
-
-const NODE_W = 164;
-const NODE_H = 52;
-const H_GAP = 22;
-const V_GAP = 88;
-
-type PositionedNode = {
-  node: TreeNode;
-  x: number; // centre-x
-  y: number; // top-y
-  parentId: string | null;
-};
-
-function subtreeWidth(node: TreeNode, collapsed: Set<string>): number {
-  if (!node.children || collapsed.has(node.id)) return NODE_W + H_GAP;
-  const sum = node.children.reduce((acc, c) => acc + subtreeWidth(c, collapsed), 0);
-  return Math.max(NODE_W + H_GAP, sum);
-}
-
-function layout(
-  node: TreeNode,
-  depth: number,
-  leftEdge: number,
-  collapsed: Set<string>,
-  parentId: string | null,
-  out: PositionedNode[],
-): void {
-  const sw = subtreeWidth(node, collapsed);
-  const cx = leftEdge + sw / 2;
-  out.push({ node, x: cx, y: depth * (NODE_H + V_GAP), parentId });
-
-  if (node.children && !collapsed.has(node.id)) {
-    let childLeft = leftEdge;
-    for (const child of node.children) {
-      layout(child, depth + 1, childLeft, collapsed, node.id, out);
-      childLeft += subtreeWidth(child, collapsed);
-    }
-  }
-}
-
 // ─── Category colours ────────────────────────────────────────────────────────
 
 const CATEGORY_STYLES: Record<NodeCategory, { bg: string; border: string; text: string; glow: string }> = {
-  root:      { bg: "#1f7a6b", border: "#155f54", text: "#ffffff", glow: "rgba(31,122,107,0.45)" },
-  kernel:    { bg: "#1a5c52", border: "#10403a", text: "#e8f4f2", glow: "rgba(26,92,82,0.4)" },
-  library:   { bg: "#2d6a9f", border: "#1e4f7a", text: "#e8f1fa", glow: "rgba(45,106,159,0.4)" },
-  highlight: { bg: "#c47a1e", border: "#9a5f10", text: "#fff8ee", glow: "rgba(196,122,30,0.55)" },
-  service:   { bg: "#7a3b6e", border: "#5e2c54", text: "#f5ecf4", glow: "rgba(122,59,110,0.4)" },
-  userspace: { bg: "#4a6b5a", border: "#354f41", text: "#eaf2ee", glow: "rgba(74,107,90,0.4)" },
+  root:      { bg: "#1f7a6b", border: "#155f54", text: "#ffffff",  glow: "rgba(31,122,107,0.45)" },
+  kernel:    { bg: "#1a5c52", border: "#10403a", text: "#e8f4f2",  glow: "rgba(26,92,82,0.4)" },
+  library:   { bg: "#2d6a9f", border: "#1e4f7a", text: "#e8f1fa",  glow: "rgba(45,106,159,0.4)" },
+  highlight: { bg: "#c47a1e", border: "#9a5f10", text: "#fff8ee",  glow: "rgba(196,122,30,0.55)" },
+  service:   { bg: "#7a3b6e", border: "#5e2c54", text: "#f5ecf4",  glow: "rgba(122,59,110,0.4)" },
+  userspace: { bg: "#4a6b5a", border: "#354f41", text: "#eaf2ee",  glow: "rgba(74,107,90,0.4)" },
 };
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
 export function SystemDiagram() {
-  const [collapsed, setCollapsed] = useState<Set<string>>(new Set(["netstack", "openssl"]));
-  const [selected, setSelected] = useState<TreeNode | null>(LINUX_TREE);
-  const containerRef = useRef<HTMLDivElement>(null);
+  // path[0] is always LINUX_TREE (the root context we're inside)
+  const [path, setPath] = useState<TreeNode[]>([LINUX_TREE]);
+  const [selected, setSelected] = useState<TreeNode | null>(null);
 
-  const nodes = useMemo<PositionedNode[]>(() => {
-    const out: PositionedNode[] = [];
-    layout(LINUX_TREE, 0, 0, collapsed, null, out);
-    return out;
-  }, [collapsed]);
+  const currentNode = path[path.length - 1];
 
-  const totalW = useMemo(() => subtreeWidth(LINUX_TREE, collapsed), [collapsed]);
-  const totalH = useMemo(() => {
-    const maxY = Math.max(...nodes.map((n) => n.y));
-    return maxY + NODE_H + 40;
-  }, [nodes]);
+  const handleCardClick = (node: TreeNode) => {
+    setSelected(node);
+    if (node.children) {
+      setPath((p) => [...p, node]);
+    }
+  };
 
-  const posMap = useMemo(() => {
-    const m = new Map<string, PositionedNode>();
-    nodes.forEach((n) => m.set(n.node.id, n));
-    return m;
-  }, [nodes]);
-
-  const toggleCollapse = useCallback((id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
-    setCollapsed((prev) => {
-      const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
-      return next;
-    });
-  }, []);
-
-  const svgPaths = useMemo(() => {
-    return nodes
-      .filter((n) => n.parentId !== null)
-      .map((n) => {
-        const parent = posMap.get(n.parentId!);
-        if (!parent) return null;
-        const x1 = parent.x;
-        const y1 = parent.y + NODE_H;
-        const x2 = n.x;
-        const y2 = n.y;
-        const cy = (y1 + y2) / 2;
-        return (
-          <path
-            key={`${n.parentId}-${n.node.id}`}
-            d={`M${x1},${y1} C${x1},${cy} ${x2},${cy} ${x2},${y2}`}
-            fill="none"
-            stroke={n.node.category === "highlight" ? "rgba(196,122,30,0.5)" : "rgba(29,40,38,0.18)"}
-            strokeWidth={n.node.category === "highlight" ? 2 : 1.5}
-            strokeDasharray={n.node.category === "highlight" ? "0" : "0"}
-          />
-        );
-      });
-  }, [nodes, posMap]);
+  const navigateTo = (idx: number) => {
+    const newPath = path.slice(0, idx + 1);
+    setPath(newPath);
+    setSelected(newPath[newPath.length - 1]);
+  };
 
   return (
     <div className="diagram-shell">
-      {/* Info panel */}
+
+      {/* Breadcrumb */}
+      <nav className="diagram-breadcrumb" aria-label="Architecture path">
+        {path.map((node, i) => {
+          const isLast = i === path.length - 1;
+          return (
+            <span key={node.id} className="diagram-breadcrumb-segment">
+              {i > 0 && <span className="diagram-breadcrumb-sep">›</span>}
+              <button
+                className={`diagram-breadcrumb-item${isLast ? " active" : ""}`}
+                onClick={() => navigateTo(i)}
+                disabled={isLast}
+              >
+                {node.label}
+              </button>
+            </span>
+          );
+        })}
+      </nav>
+
+      {/* Current level header */}
+      <div className="diagram-level-header">
+        <div
+          className="diagram-level-dot"
+          style={{ background: CATEGORY_STYLES[currentNode.category].bg }}
+        />
+        <div>
+          <p className="diagram-level-title">{currentNode.label}</p>
+          <p className="diagram-level-sub">{currentNode.sublabel}</p>
+        </div>
+      </div>
+
+      {/* Info panel — shown when a leaf is selected or before drilling in */}
       {selected && (
         <div className="diagram-info">
           <div
@@ -336,67 +291,40 @@ export function SystemDiagram() {
           <p className="diagram-info-sub">{selected.sublabel}</p>
           <p className="diagram-info-desc">{selected.description}</p>
           {selected.children && (
-            <p className="diagram-info-hint">
-              {collapsed.has(selected.id) ? "↓ Click node to expand" : "Click node to collapse children"}
-            </p>
+            <p className="diagram-info-hint">↓ Drilled into {selected.label} — see children below</p>
           )}
         </div>
       )}
 
-      {/* Tree */}
-      <div className="diagram-scroll" ref={containerRef}>
-        <div
-          className="diagram-canvas"
-          style={{ width: totalW, height: totalH }}
-        >
-          <svg
-            className="diagram-svg"
-            width={totalW}
-            height={totalH}
-            style={{ position: "absolute", inset: 0, pointerEvents: "none" }}
-          >
-            {svgPaths}
-          </svg>
-
-          {nodes.map(({ node, x, y }) => {
-            const style = CATEGORY_STYLES[node.category];
-            const isSelected = selected?.id === node.id;
-            const hasChildren = !!node.children;
-            const isCollapsed = collapsed.has(node.id);
-
-            return (
-              <button
-                key={node.id}
-                className={`diagram-node ${isSelected ? "selected" : ""} ${node.category === "highlight" ? "highlighted" : ""}`}
-                style={{
-                  left: x - NODE_W / 2,
-                  top: y,
-                  width: NODE_W,
-                  height: NODE_H,
-                  background: style.bg,
-                  borderColor: style.border,
-                  color: style.text,
-                  "--glow": style.glow,
-                } as React.CSSProperties}
-                onClick={() => setSelected(node)}
-              >
-                <span className="diagram-node-label">{node.label}</span>
-                <span className="diagram-node-sub">{node.sublabel}</span>
-                {hasChildren && (
-                  <span
-                    className="diagram-node-toggle"
-                    role="button"
-                    onClick={(e) => toggleCollapse(node.id, e)}
-                    title={isCollapsed ? "Expand" : "Collapse"}
-                  >
-                    {isCollapsed ? "+" : "−"}
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
+      {/* Children grid */}
+      <div className="diagram-grid">
+        {currentNode.children?.map((node) => {
+          const style = CATEGORY_STYLES[node.category];
+          const isSelected = selected?.id === node.id;
+          return (
+            <button
+              key={node.id}
+              className={`diagram-card${isSelected ? " selected" : ""}${node.category === "highlight" ? " highlighted" : ""}`}
+              style={{
+                background: style.bg,
+                borderColor: style.border,
+                color: style.text,
+                "--glow": style.glow,
+              } as React.CSSProperties}
+              onClick={() => handleCardClick(node)}
+            >
+              <div className="diagram-card-body">
+                <span className="diagram-card-label">{node.label}</span>
+                <span className="diagram-card-sub">{node.sublabel}</span>
+              </div>
+              {node.children && (
+                <span className="diagram-card-arrow" aria-hidden>›</span>
+              )}
+            </button>
+          );
+        })}
       </div>
+
     </div>
   );
 }
