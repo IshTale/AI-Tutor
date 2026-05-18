@@ -1,4 +1,4 @@
-# AI Tutor Architecture Summary
+# AI Legacy Code Solver Architecture Summary
 
 ## Agent Roles
 
