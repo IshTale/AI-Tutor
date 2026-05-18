@@ -16,8 +16,8 @@ from backend.security.rate_limiter import RateLimiter
 from backend.security.sandbox import DockerSandbox
 from backend.tools.animate_tool import AnimateTool
 from backend.tools.browse_tool import BrowseTool
+from backend.tools.claude_client import ClaudeClient
 from backend.tools.fetch_file_tool import FetchFileTool
-from backend.tools.gemini_client import GeminiClient
 from backend.tools.generate_tool import GenerateTool
 from backend.tools.reason_tool import ReasonTool
 from backend.tools.registry import ToolRegistry
@@ -30,7 +30,7 @@ from backend.ws.websocket_server import WebSocketHub
 settings = get_settings()
 assets = AssetStore(settings)
 sessions = SessionStore(settings)
-gemini = GeminiClient(settings)
+claude = ClaudeClient(settings)
 hub = WebSocketHub()
 merger = Merger(hub)
 
@@ -39,8 +39,8 @@ def build_tool_registry() -> ToolRegistry:
     registry = ToolRegistry()
     sanitizer = PromptSanitizer()
     sandbox = DockerSandbox()
-    registry.register(ReasonTool(gemini))
-    registry.register(GenerateTool(gemini, assets))
+    registry.register(ReasonTool(claude, settings))
+    registry.register(GenerateTool(assets))
     registry.register(SpeakTool())
     registry.register(AnimateTool())
     registry.register(FetchFileTool(sanitizer, assets))
@@ -75,7 +75,8 @@ async def health() -> dict:
         "tools": tools.names,
         "storage": "local",
         "local_storage_dir": settings.local_storage_dir,
-        "gemini_enabled": gemini.enabled,
+        "claude_enabled": claude.enabled,
+        "claude_model": settings.claude_model,
     }
 
 

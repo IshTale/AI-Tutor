@@ -1,36 +1,18 @@
-import logging
 from html import escape
 
 from backend.db.asset_store import AssetStore
 from backend.tools.base import BaseTool, ToolResult
-from backend.tools.gemini_client import GeminiClient
-
-logger = logging.getLogger(__name__)
 
 
 class GenerateTool(BaseTool):
     name = "generate"
 
-    def __init__(self, gemini: GeminiClient, assets: AssetStore) -> None:
-        self.gemini = gemini
+    def __init__(self, assets: AssetStore) -> None:
         self.assets = assets
 
     async def invoke(self, payload: dict) -> ToolResult:
         instruction = str(payload.get("instruction") or payload.get("prompt") or "Explain the concept visually.")
-
-        image_bytes = None
-        try:
-            image_bytes = await self.gemini.generate_image_bytes(
-                f"Create a clean whiteboard diagram for a tutoring explanation. {instruction}"
-            )
-        except Exception as exc:
-            logger.warning("Image generation failed, using SVG fallback: %s", exc)
-
-        if image_bytes:
-            uri = await self.assets.put_bytes(image_bytes, "image/png", "whiteboards")
-        else:
-            uri = await self.assets.put_data_uri_svg(self._fallback_svg(instruction))
-
+        uri = await self.assets.put_data_uri_svg(self._fallback_svg(instruction))
         return ToolResult(tool=self.name, payload={"image_uri": uri})
 
     def _fallback_svg(self, instruction: str) -> str:
@@ -42,7 +24,7 @@ class GenerateTool(BaseTool):
     <path d="M0 180h1920M0 340h1920M0 500h1920M0 660h1920M0 820h1920"/>
     <path d="M220 0v1080M420 0v1080M620 0v1080M820 0v1080M1020 0v1080M1220 0v1080M1420 0v1080M1620 0v1080"/>
   </g>
-  <text x="280" y="260" font-family="Inter, Arial" font-size="64" font-weight="700" fill="#223836">AI Tutor Whiteboard</text>
+  <text x="280" y="260" font-family="Inter, Arial" font-size="64" font-weight="700" fill="#223836">GuardRail</text>
   <text x="285" y="345" font-family="Inter, Arial" font-size="34" fill="#44524f">{safe}</text>
   <path d="M420 790 C 620 440, 920 400, 1260 690" fill="none" stroke="#1f7a6b" stroke-width="12" stroke-linecap="round"/>
   <circle cx="925" cy="506" r="18" fill="#ff3d59"/>
