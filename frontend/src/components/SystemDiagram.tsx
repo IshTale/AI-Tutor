@@ -223,63 +223,94 @@ const CATEGORY_STYLES: Record<NodeCategory, { bg: string; border: string; text: 
   userspace: { bg: "#4a6b5a", border: "#354f41", text: "#eaf2ee",  glow: "rgba(74,107,90,0.4)" },
 };
 
-// ─── Component ────────────────────────────────────────────────────────────────
+// ─── Tree node component ──────────────────────────────────────────────────────
+
+type TreeItemProps = {
+  node: TreeNode;
+  depth: number;
+  expanded: Set<string>;
+  selected: TreeNode | null;
+  onSelect: (node: TreeNode) => void;
+  onToggle: (id: string) => void;
+};
+
+function TreeItem({ node, depth, expanded, selected, onSelect, onToggle }: TreeItemProps) {
+  const isExpanded = expanded.has(node.id);
+  const isSelected = selected?.id === node.id;
+  const hasChildren = !!node.children;
+  const style = CATEGORY_STYLES[node.category];
+
+  return (
+    <div className="tree-item">
+      <button
+        className={`tree-card${isSelected ? " selected" : ""}${node.category === "highlight" ? " highlighted" : ""}`}
+        style={{
+          marginLeft: depth * 20,
+          background: style.bg,
+          borderColor: style.border,
+          color: style.text,
+          "--glow": style.glow,
+        } as React.CSSProperties}
+        onClick={() => {
+          onSelect(node);
+          if (hasChildren) onToggle(node.id);
+        }}
+      >
+        <div className="tree-card-body">
+          <span className="tree-card-label">{node.label}</span>
+          <span className="tree-card-sub">{node.sublabel}</span>
+        </div>
+        {hasChildren && (
+          <span className="tree-card-toggle">{isExpanded ? "−" : "+"}</span>
+        )}
+      </button>
+
+      {hasChildren && isExpanded && (
+        <div className="tree-children" style={{ marginLeft: depth * 20 }}>
+          {node.children!.map((child) => (
+            <TreeItem
+              key={child.id}
+              node={child}
+              depth={depth + 1}
+              expanded={expanded}
+              selected={selected}
+              onSelect={onSelect}
+              onToggle={onToggle}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── Root component ───────────────────────────────────────────────────────────
 
 export function SystemDiagram() {
-  // path[0] is always LINUX_TREE (the root context we're inside)
-  const [path, setPath] = useState<TreeNode[]>([LINUX_TREE]);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<TreeNode | null>(null);
 
-  const currentNode = path[path.length - 1];
-
-  const handleCardClick = (node: TreeNode) => {
-    setSelected(node);
-    if (node.children) {
-      setPath((p) => [...p, node]);
-    }
-  };
-
-  const navigateTo = (idx: number) => {
-    const newPath = path.slice(0, idx + 1);
-    setPath(newPath);
-    setSelected(newPath[newPath.length - 1]);
+  const onToggle = (id: string) => {
+    setExpanded((prev) => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
   };
 
   return (
     <div className="diagram-shell">
 
-      {/* Breadcrumb */}
-      <nav className="diagram-breadcrumb" aria-label="Architecture path">
-        {path.map((node, i) => {
-          const isLast = i === path.length - 1;
-          return (
-            <span key={node.id} className="diagram-breadcrumb-segment">
-              {i > 0 && <span className="diagram-breadcrumb-sep">›</span>}
-              <button
-                className={`diagram-breadcrumb-item${isLast ? " active" : ""}`}
-                onClick={() => navigateTo(i)}
-                disabled={isLast}
-              >
-                {node.label}
-              </button>
-            </span>
-          );
-        })}
-      </nav>
-
-      {/* Current level header */}
-      <div className="diagram-level-header">
-        <div
-          className="diagram-level-dot"
-          style={{ background: CATEGORY_STYLES[currentNode.category].bg }}
-        />
+      {/* Header */}
+      <div className="diagram-header">
+        <div className="diagram-header-dot" />
         <div>
-          <p className="diagram-level-title">{currentNode.label}</p>
-          <p className="diagram-level-sub">{currentNode.sublabel}</p>
+          <p className="diagram-header-title">Linux Architecture</p>
+          <p className="diagram-header-sub">Click any component to expand</p>
         </div>
       </div>
 
-      {/* Info panel — shown when a leaf is selected or before drilling in */}
+      {/* Info panel */}
       {selected && (
         <div className="diagram-info">
           <div
@@ -290,39 +321,22 @@ export function SystemDiagram() {
           </div>
           <p className="diagram-info-sub">{selected.sublabel}</p>
           <p className="diagram-info-desc">{selected.description}</p>
-          {selected.children && (
-            <p className="diagram-info-hint">↓ Drilled into {selected.label} — see children below</p>
-          )}
         </div>
       )}
 
-      {/* Children grid */}
-      <div className="diagram-grid">
-        {currentNode.children?.map((node) => {
-          const style = CATEGORY_STYLES[node.category];
-          const isSelected = selected?.id === node.id;
-          return (
-            <button
-              key={node.id}
-              className={`diagram-card${isSelected ? " selected" : ""}${node.category === "highlight" ? " highlighted" : ""}`}
-              style={{
-                background: style.bg,
-                borderColor: style.border,
-                color: style.text,
-                "--glow": style.glow,
-              } as React.CSSProperties}
-              onClick={() => handleCardClick(node)}
-            >
-              <div className="diagram-card-body">
-                <span className="diagram-card-label">{node.label}</span>
-                <span className="diagram-card-sub">{node.sublabel}</span>
-              </div>
-              {node.children && (
-                <span className="diagram-card-arrow" aria-hidden>›</span>
-              )}
-            </button>
-          );
-        })}
+      {/* Tree */}
+      <div className="diagram-tree">
+        {LINUX_TREE.children!.map((node) => (
+          <TreeItem
+            key={node.id}
+            node={node}
+            depth={0}
+            expanded={expanded}
+            selected={selected}
+            onSelect={setSelected}
+            onToggle={onToggle}
+          />
+        ))}
       </div>
 
     </div>
