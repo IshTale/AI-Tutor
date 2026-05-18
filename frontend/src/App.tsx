@@ -25,7 +25,7 @@ function App() {
   const { connectionStatus, sendMessage, onEvent, receiveMockEvent } = useWebSocket();
   const { camera, wrapperStyle, applyMove } = useCameraTransform();
   const { frame, startAnimation } = usePointerAnimation();
-  const { enqueue, isPlaying } = useAudioPlayer();
+  const { enqueue, isPlaying, cancel } = useAudioPlayer();
 
   const [agentStatus, setAgentStatus] = useState<AgentStatusEvent | null>(null);
   const [transcript, setTranscript] = useState<TranscriptLine[]>([]);
@@ -50,10 +50,8 @@ function App() {
   useEffect(
     () =>
       onEvent("tutor_speak", (event: TutorSpeakEvent) => {
-        if (event.audio_url) {
-          enqueue(event.audio_url);
-        }
         if (event.transcript) {
+          enqueue(event.transcript);
           addTranscript(event.speaker ?? "tutor", event.transcript);
         }
         if (event.pointer_animation) {
@@ -187,7 +185,7 @@ function App() {
       <StudentControls
         onSendText={handleSendText}
         onPushToTalk={(active) => sendMessage({ type: "push_to_talk", active, selectedFileId: selectedFile?.id })}
-        onInterrupt={() => sendMessage({ type: "interrupt" })}
+        onInterrupt={() => { cancel(); sendMessage({ type: "interrupt" }); }}
       />
     </div>
   );

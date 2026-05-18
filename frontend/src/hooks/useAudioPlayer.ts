@@ -3,39 +3,52 @@ import { useCallback, useEffect, useRef, useState } from "react";
 export function useAudioPlayer() {
   const [isPlaying, setIsPlaying] = useState(false);
   const queue = useRef<string[]>([]);
-  const audio = useRef<HTMLAudioElement | null>(null);
+  const active = useRef(false);
 
   const playNext = useCallback(() => {
-    const next = queue.current.shift();
-    if (!next) {
+    const text = queue.current.shift();
+    if (!text || !window.speechSynthesis) {
+      active.current = false;
       setIsPlaying(false);
       return;
     }
 
+    active.current = true;
     setIsPlaying(true);
-    audio.current = new Audio(next);
-    audio.current.addEventListener("ended", playNext, { once: true });
-    audio.current.addEventListener("error", playNext, { once: true });
-    void audio.current.play().catch(playNext);
+
+    const utterance = new SpeechSynthesisUtterance(text);
+    utterance.rate = 1.05;
+    utterance.pitch = 1.0;
+    utterance.onend = () => playNext();
+    utterance.onerror = () => playNext();
+    window.speechSynthesis.speak(utterance);
   }, []);
 
   const enqueue = useCallback(
-    (audioUrl: string) => {
-      queue.current.push(audioUrl);
-      if (!isPlaying) {
+    (text: string) => {
+      if (!text.trim()) return;
+      queue.current.push(text);
+      if (!active.current) {
         playNext();
       }
     },
-    [isPlaying, playNext],
+    [playNext],
   );
+
+  const cancel = useCallback(() => {
+    queue.current = [];
+    active.current = false;
+    setIsPlaying(false);
+    window.speechSynthesis?.cancel();
+  }, []);
 
   useEffect(
     () => () => {
-      audio.current?.pause();
+      window.speechSynthesis?.cancel();
       queue.current = [];
     },
     [],
   );
 
-  return { enqueue, isPlaying };
+  return { enqueue, isPlaying, cancel };
 }
