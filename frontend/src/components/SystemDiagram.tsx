@@ -465,9 +465,13 @@ export function SystemDiagram() {
   const collapsedRef = useRef(collapsed);
   const prevRenderedIds = useRef<Set<string>>(new Set());
 
-  const [zoomTarget, setZoomTarget] = useState<string | null>(null);
+  // Stack of zoom targets: null = fit-all, string = node id.
+  // Expanding pushes; collapsing pops back to the previous level.
+  const [zoomStack, setZoomStack] = useState<(string | null)[]>([null]);
   const [transform, setTransform] = useState({ tx: 0, ty: 24, s: 1 });
   const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  const zoomTarget = zoomStack[zoomStack.length - 1] ?? null;
 
   useEffect(() => { collapsedRef.current = collapsed; }, [collapsed]);
 
@@ -555,7 +559,17 @@ export function SystemDiagram() {
       wasCollapsed ? next.delete(id) : next.add(id);
       return next;
     });
-    setZoomTarget(wasCollapsed ? id : null);
+    if (wasCollapsed) {
+      // Expanding: push this node onto the zoom stack
+      setZoomStack((prev) => [...prev, id]);
+    } else {
+      // Collapsing: pop back to just before this node was pushed
+      setZoomStack((prev) => {
+        const idx = prev.lastIndexOf(id);
+        if (idx <= 0) return [null];
+        return prev.slice(0, idx);
+      });
+    }
   }, []);
 
   // ── SVG paths ─────────────────────────────────────────────────────────────
