@@ -1,4 +1,4 @@
-# AI Legacy Code Solver Architecture Summary
+# AI Legacy Code Explorer Architecture Summary
 
 ## Agent Roles
 
