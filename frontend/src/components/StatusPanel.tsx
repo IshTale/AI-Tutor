@@ -19,7 +19,7 @@ export function StatusPanel({ status, transcript, isAudioPlaying, connectionStat
           <Activity size={18} />
         </div>
         <div>
-          <h1>OpenClaw Tutor</h1>
+          <h1>GuardRail</h1>
           <p>{status?.phase ?? "IDLE"} {status?.tool ? `- ${status.tool}` : ""}</p>
         </div>
         <div className={`connection ${isConnected ? "open" : "closed"}`} title={connectionStatus}>
