@@ -1,20 +1,20 @@
 from functools import lru_cache
+from pathlib import Path
 
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
+env_path = Path(__file__).resolve().with_name(".env")
+
 
 class Settings(BaseSettings):
-    aws_region: str = "us-west-2"
-    aws_s3_bucket: str = "ai-tutor-assets"
-    aws_dynamodb_session_table: str = "ai_tutor_sessions"
-    aws_polly_voice_id: str = "Joanna"
+    local_storage_dir: str = "backend/local_data"
     gemini_api_key: str | None = None
     gemini_text_model: str = "gemini-2.5-flash"
     gemini_image_model: str = "gemini-2.5-flash-image"
-    ai_tutor_dev_fallback: bool = True
+    gemini_enabled: bool = True
     frontend_origin: str = "http://localhost:5173"
 
-    model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8")
+    model_config = SettingsConfigDict(env_file=env_path, env_file_encoding="utf-8", extra="ignore")
 
 
 @lru_cache

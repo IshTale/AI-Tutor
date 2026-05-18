@@ -11,7 +11,7 @@ class GeminiClient:
 
     @property
     def enabled(self) -> bool:
-        return self._client is not None and not self.settings.ai_tutor_dev_fallback
+        return self._client is not None and self.settings.gemini_enabled
 
     async def generate_text(self, prompt: str, system: str | None = None) -> str:
         if not self.enabled:

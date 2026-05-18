@@ -7,7 +7,6 @@ from fastapi.staticfiles import StaticFiles
 
 from backend.config import get_settings
 from backend.db.asset_store import AssetStore
-from backend.db.aws_clients import AwsClients
 from backend.db.session_store import SessionStore
 from backend.merger.merger import Merger
 from backend.openclaw.agent import OpenClawAgent
@@ -29,9 +28,8 @@ from backend.ws.websocket_server import WebSocketHub
 
 
 settings = get_settings()
-aws = AwsClients(settings)
-assets = AssetStore(settings, aws)
-sessions = SessionStore(settings, aws)
+assets = AssetStore(settings)
+sessions = SessionStore(settings)
 gemini = GeminiClient(settings)
 hub = WebSocketHub()
 merger = Merger(hub)
@@ -43,9 +41,9 @@ def build_tool_registry() -> ToolRegistry:
     sandbox = DockerSandbox()
     registry.register(ReasonTool(gemini))
     registry.register(GenerateTool(gemini, assets))
-    registry.register(SpeakTool(settings, aws, assets))
+    registry.register(SpeakTool())
     registry.register(AnimateTool())
-    registry.register(FetchFileTool(sanitizer))
+    registry.register(FetchFileTool(sanitizer, assets))
     registry.register(RunScriptTool(sandbox, assets))
     registry.register(BrowseTool())
     return registry
@@ -64,9 +62,9 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-cache_dir = Path(__file__).resolve().parent / "cache"
-cache_dir.mkdir(exist_ok=True)
-app.mount("/cache", StaticFiles(directory=cache_dir), name="cache")
+local_asset_dir = Path(settings.local_storage_dir) / "assets"
+local_asset_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/local-assets", StaticFiles(directory=local_asset_dir), name="local-assets")
 
 
 @app.get("/health")
@@ -74,9 +72,9 @@ async def health() -> dict:
     return {
         "status": "ok",
         "tools": tools.names,
-        "aws_region": settings.aws_region,
+        "storage": "local",
+        "local_storage_dir": settings.local_storage_dir,
         "gemini_enabled": gemini.enabled,
-        "dev_fallback": settings.ai_tutor_dev_fallback,
     }
 
 

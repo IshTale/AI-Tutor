@@ -1,16 +1,16 @@
+import json
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
-from botocore.exceptions import BotoCoreError, ClientError
-
 from backend.config import Settings
-from backend.db.aws_clients import AwsClients
 
 
 class SessionStore:
-    def __init__(self, settings: Settings, aws: AwsClients) -> None:
+    def __init__(self, settings: Settings) -> None:
         self.settings = settings
-        self.aws = aws
+        self.session_dir = Path(settings.local_storage_dir) / "sessions"
+        self.session_dir.mkdir(parents=True, exist_ok=True)
         self._memory: dict[str, list[dict[str, Any]]] = {}
 
     async def write_ephemeral(self, session_id: str, event: dict[str, Any]) -> None:
@@ -21,7 +21,14 @@ class SessionStore:
         return {"status": "ack"}
 
     async def get_session_log(self, session_id: str) -> list[dict[str, Any]]:
-        return self._memory.get(session_id, [])
+        if session_id in self._memory:
+            return self._memory[session_id]
+        path = self._session_path(session_id)
+        if not path.exists():
+            return []
+        records = [json.loads(line) for line in path.read_text(encoding="utf-8").splitlines() if line.strip()]
+        self._memory[session_id] = records
+        return records
 
     async def _write(self, session_id: str, payload: dict[str, Any], critical: bool) -> None:
         item = {
@@ -31,13 +38,9 @@ class SessionStore:
             "payload": payload,
         }
         self._memory.setdefault(session_id, []).append(item)
+        with self._session_path(session_id).open("a", encoding="utf-8") as file:
+            file.write(json.dumps(item) + "\n")
 
-        if self.settings.ai_tutor_dev_fallback:
-            return
-
-        try:
-            table = self.aws.dynamodb.Table(self.settings.aws_dynamodb_session_table)
-            table.put_item(Item=item)
-        except (BotoCoreError, ClientError) as exc:
-            if critical:
-                raise RuntimeError("Failed to persist critical session record") from exc
+    def _session_path(self, session_id: str) -> Path:
+        safe_id = "".join(character for character in session_id if character.isalnum() or character in "-_")
+        return self.session_dir / f"{safe_id or 'session'}.jsonl"

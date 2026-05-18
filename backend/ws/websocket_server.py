@@ -1,7 +1,7 @@
 from collections import defaultdict
 from itertools import count
 
-from fastapi import WebSocket
+from fastapi import WebSocket, WebSocketDisconnect
 from pydantic import TypeAdapter
 
 from backend.ws.event_models import ServerEvent
@@ -29,7 +29,12 @@ class WebSocketHub:
         self._events[client_id].append(event)
         websocket = self._clients.get(client_id)
         if websocket:
-            await websocket.send_json(event.model_dump())
+            try:
+                await websocket.send_json(event.model_dump())
+            except WebSocketDisconnect:
+                self.disconnect(client_id)
+            except RuntimeError:
+                self.disconnect(client_id)
 
     async def replay(self, client_id: str, last_seq: int) -> None:
         websocket = self._clients.get(client_id)
@@ -37,4 +42,11 @@ class WebSocketHub:
             return
         for event in self._events.get(client_id, []):
             if event.seq > last_seq:
-                await websocket.send_json(event.model_dump())
+                try:
+                    await websocket.send_json(event.model_dump())
+                except WebSocketDisconnect:
+                    self.disconnect(client_id)
+                    return
+                except RuntimeError:
+                    self.disconnect(client_id)
+                    return
