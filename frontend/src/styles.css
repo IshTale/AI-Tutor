@@ -502,9 +502,9 @@ button {
   flex-direction: column;
   width: 100%;
   height: 100%;
-  overflow: hidden;
   padding: 24px 28px;
   gap: 16px;
+  overflow: hidden;
   background:
     linear-gradient(rgba(31, 122, 107, 0.06) 1px, transparent 1px),
     linear-gradient(90deg, rgba(31, 122, 107, 0.06) 1px, transparent 1px),
@@ -512,78 +512,34 @@ button {
   background-size: 60px 60px;
 }
 
-/* Breadcrumb */
+/* Header */
 
-.diagram-breadcrumb {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 2px;
-  flex-shrink: 0;
-}
-
-.diagram-breadcrumb-segment {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.diagram-breadcrumb-sep {
-  color: rgba(29, 40, 38, 0.35);
-  font-size: 16px;
-  padding: 0 2px;
-  user-select: none;
-}
-
-.diagram-breadcrumb-item {
-  padding: 4px 10px;
-  border: none;
-  border-radius: 6px;
-  background: transparent;
-  color: #1f7a6b;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background 120ms;
-}
-
-.diagram-breadcrumb-item:hover:not(:disabled) {
-  background: rgba(31, 122, 107, 0.1);
-}
-
-.diagram-breadcrumb-item.active {
-  color: #223836;
-  cursor: default;
-  font-weight: 700;
-}
-
-/* Level header */
-
-.diagram-level-header {
+.diagram-header {
   display: flex;
   align-items: center;
   gap: 12px;
   flex-shrink: 0;
 }
 
-.diagram-level-dot {
-  width: 12px;
-  height: 12px;
+.diagram-header-dot {
+  width: 10px;
+  height: 10px;
   border-radius: 50%;
+  background: #1f7a6b;
   flex-shrink: 0;
 }
 
-.diagram-level-title {
+.diagram-header-title {
   margin: 0;
-  font-size: 22px;
+  font-size: 20px;
   font-weight: 750;
   color: #1d2826;
   letter-spacing: -0.3px;
 }
 
-.diagram-level-sub {
+.diagram-header-sub {
   margin: 2px 0 0;
-  font-size: 13px;
+  font-size: 12px;
   color: #65726f;
 }
 
@@ -625,57 +581,58 @@ button {
   line-height: 1.5;
 }
 
-.diagram-info-hint {
-  margin: 7px 0 0;
-  color: #1f7a6b;
-  font-size: 12px;
-  font-style: italic;
-}
+/* Tree */
 
-/* Cards grid */
-
-.diagram-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
+.diagram-tree {
   flex: 1;
-  align-content: start;
+  min-height: 0;
   overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-right: 4px;
 }
 
-.diagram-card {
+.tree-item {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.tree-card {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 16px 14px;
+  gap: 12px;
+  width: 100%;
+  padding: 14px 16px;
   border: 1.5px solid;
   border-radius: 10px;
   cursor: pointer;
   text-align: left;
   line-height: 1.25;
   transition: transform 130ms ease, box-shadow 130ms ease;
-  min-height: 76px;
+  min-height: 68px;
 }
 
-.diagram-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 8px 24px var(--glow, rgba(0,0,0,0.2));
+.tree-card:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 6px 20px var(--glow, rgba(0,0,0,0.18));
 }
 
-.diagram-card.selected {
-  box-shadow: 0 0 0 2px rgba(255,255,255,0.65), 0 8px 28px var(--glow, rgba(0,0,0,0.28));
-  transform: translateY(-2px);
+.tree-card.selected {
+  box-shadow: 0 0 0 2px rgba(255,255,255,0.65), 0 6px 24px var(--glow, rgba(0,0,0,0.28));
+  transform: translateY(-1px);
 }
 
-.diagram-card.highlighted {
+.tree-card.highlighted {
   box-shadow: 0 4px 18px var(--glow, rgba(196,122,30,0.45));
 }
 
-.diagram-card.highlighted.selected {
+.tree-card.highlighted.selected {
   box-shadow: 0 0 0 2.5px rgba(255,255,255,0.7), 0 8px 32px var(--glow, rgba(196,122,30,0.65));
 }
 
-.diagram-card-body {
+.tree-card-body {
   display: flex;
   flex-direction: column;
   gap: 3px;
@@ -683,21 +640,41 @@ button {
   min-width: 0;
 }
 
-.diagram-card-label {
-  font-size: 14px;
+.tree-card-label {
+  font-size: 15px;
   font-weight: 700;
   letter-spacing: 0.1px;
 }
 
-.diagram-card-sub {
-  font-size: 11px;
+.tree-card-sub {
+  font-size: 12px;
   opacity: 0.75;
   font-weight: 500;
 }
 
-.diagram-card-arrow {
-  font-size: 20px;
-  opacity: 0.6;
-  flex-shrink: 0;
+.tree-card-toggle {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: rgba(0,0,0,0.15);
+  font-size: 16px;
+  font-weight: 700;
   line-height: 1;
+  flex-shrink: 0;
+  transition: background 120ms;
+}
+
+.tree-card:hover .tree-card-toggle {
+  background: rgba(0,0,0,0.25);
+}
+
+.tree-children {
+  margin-top: 6px;
+  padding-left: 20px;
+  border-left: 2px solid rgba(29, 40, 38, 0.12);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
