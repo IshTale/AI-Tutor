@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 
 // ─── Data ────────────────────────────────────────────────────────────────────
 
@@ -266,24 +266,33 @@ const CATEGORY_STYLES: Record<NodeCategory, { bg: string; border: string; text: 
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-// Start with everything collapsed — only the root is visible
 function allIds(node: TreeNode): string[] {
   return [node.id, ...(node.children ?? []).flatMap(allIds)];
 }
 const ALL_COLLAPSED = new Set(allIds(LINUX_TREE));
+const SCROLL_PAD = 24;
 
 export function SystemDiagram() {
   const [collapsed, setCollapsed] = useState<Set<string>>(ALL_COLLAPSED);
-  const [selected, setSelected] = useState<TreeNode | null>(LINUX_TREE);
   const containerRef = useRef<HTMLDivElement>(null);
   const [scale, setScale] = useState(1);
   const [offsetX, setOffsetX] = useState(0);
+  const [hoveredId, setHoveredId] = useState<string | null>(null);
+
+  // Track which node IDs were rendered in the previous layout so new nodes
+  // can receive an enter animation class.
+  const prevRenderedIds = useRef<Set<string>>(new Set());
 
   const nodes = useMemo<PositionedNode[]>(() => {
     const out: PositionedNode[] = [];
     layout(LINUX_TREE, 0, 0, collapsed, null, out);
     return out;
   }, [collapsed]);
+
+  // Snapshot the current rendered IDs after every layout change.
+  useLayoutEffect(() => {
+    prevRenderedIds.current = new Set(nodes.map((n) => n.node.id));
+  }, [nodes]);
 
   const totalW = useMemo(() => subtreeWidth(LINUX_TREE, collapsed), [collapsed]);
   const totalH = useMemo(() => {
@@ -314,8 +323,7 @@ export function SystemDiagram() {
     return m;
   }, [nodes]);
 
-  const toggleCollapse = useCallback((id: string, e: React.MouseEvent) => {
-    e.stopPropagation();
+  const toggleCollapse = useCallback((id: string) => {
     setCollapsed((prev) => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
@@ -346,24 +354,34 @@ export function SystemDiagram() {
       });
   }, [nodes, posMap]);
 
+  // Compute tooltip position in diagram-shell coordinates.
+  const tooltip = useMemo(() => {
+    if (!hoveredId) return null;
+    const pos = posMap.get(hoveredId);
+    const entry = nodes.find((n) => n.node.id === hoveredId);
+    if (!pos || !entry) return null;
+    const nodeRightInShell = (pos.x + NODE_W / 2) * scale + offsetX + SCROLL_PAD;
+    const nodeTopInShell = pos.y * scale + SCROLL_PAD;
+    return { node: entry.node, x: nodeRightInShell + 12, y: nodeTopInShell };
+  }, [hoveredId, posMap, nodes, scale, offsetX]);
+
   return (
     <div className="diagram-shell">
-      {/* Info panel */}
-      {selected && (
-        <div className="diagram-info">
+
+      {/* Hover tooltip — rendered outside the scaled canvas so it's never clipped */}
+      {tooltip && (
+        <div
+          className="diagram-tooltip"
+          style={{ left: tooltip.x, top: tooltip.y }}
+        >
           <div
-            className="diagram-info-badge"
-            style={{ background: CATEGORY_STYLES[selected.category].bg }}
+            className="diagram-tooltip-badge"
+            style={{ background: CATEGORY_STYLES[tooltip.node.category].bg }}
           >
-            {selected.label}
+            {tooltip.node.label}
           </div>
-          <p className="diagram-info-sub">{selected.sublabel}</p>
-          <p className="diagram-info-desc">{selected.description}</p>
-          {selected.children && (
-            <p className="diagram-info-hint">
-              {collapsed.has(selected.id) ? "Click + to expand children" : "Click − to collapse"}
-            </p>
-          )}
+          <p className="diagram-tooltip-sub">{tooltip.node.sublabel}</p>
+          <p className="diagram-tooltip-desc">{tooltip.node.description}</p>
         </div>
       )}
 
@@ -390,14 +408,13 @@ export function SystemDiagram() {
 
           {nodes.map(({ node, x, y }) => {
             const style = CATEGORY_STYLES[node.category];
-            const isSelected = selected?.id === node.id;
-            const hasChildren = !!node.children;
+            const isNew = !prevRenderedIds.current.has(node.id);
             const isCollapsed = collapsed.has(node.id);
 
             return (
               <button
                 key={node.id}
-                className={`diagram-node${isSelected ? " selected" : ""}${node.category === "highlight" ? " highlighted" : ""}`}
+                className={`diagram-node${node.category === "highlight" ? " highlighted" : ""}${isNew ? " entering" : ""}`}
                 style={{
                   left: x - NODE_W / 2,
                   top: y,
@@ -408,17 +425,15 @@ export function SystemDiagram() {
                   color: style.text,
                   "--glow": style.glow,
                 } as React.CSSProperties}
-                onClick={() => setSelected(node)}
+                onClick={() => { if (node.children) toggleCollapse(node.id); }}
+                onMouseEnter={() => setHoveredId(node.id)}
+                onMouseLeave={() => setHoveredId(null)}
+                title={node.children ? (isCollapsed ? "Expand" : "Collapse") : undefined}
               >
                 <span className="diagram-node-label">{node.label}</span>
                 <span className="diagram-node-sub">{node.sublabel}</span>
-                {hasChildren && (
-                  <span
-                    className="diagram-node-toggle"
-                    role="button"
-                    onClick={(e) => toggleCollapse(node.id, e)}
-                    title={isCollapsed ? "Expand" : "Collapse"}
-                  >
+                {node.children && (
+                  <span className="diagram-node-toggle">
                     {isCollapsed ? "+" : "−"}
                   </span>
                 )}
