@@ -1,5 +1,6 @@
-import { Mic, Pause, Send, Square } from "lucide-react";
+import { Mic, MicOff, Pause, Send } from "lucide-react";
 import { FormEvent, useState } from "react";
+import { useSpeechRecognition } from "../hooks/useSpeechRecognition";
 
 type StudentControlsProps = {
   onSendText: (text: string) => void;
@@ -9,40 +10,55 @@ type StudentControlsProps = {
 
 export function StudentControls({ onSendText, onPushToTalk, onInterrupt }: StudentControlsProps) {
   const [text, setText] = useState("");
-  const [isTalking, setIsTalking] = useState(false);
+
+  const { isListening, supported, startListening, stopListening } = useSpeechRecognition(
+    (transcript) => {
+      onSendText(transcript);
+      onPushToTalk(false);
+    },
+  );
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
     const trimmed = text.trim();
-    if (!trimmed) {
-      return;
-    }
+    if (!trimmed) return;
     onSendText(trimmed);
     setText("");
   };
 
   const toggleTalk = () => {
-    const next = !isTalking;
-    setIsTalking(next);
-    onPushToTalk(next);
+    if (isListening) {
+      stopListening();
+      onPushToTalk(false);
+    } else {
+      startListening();
+      onPushToTalk(true);
+    }
   };
 
   return (
     <div className="student-controls" aria-label="Student controls">
-      <button className={`icon-button talk ${isTalking ? "active" : ""}`} type="button" onClick={toggleTalk} title="Push to talk">
-        {isTalking ? <Square size={20} /> : <Mic size={20} />}
+      <button
+        className={`icon-button talk ${isListening ? "active" : ""}`}
+        type="button"
+        onClick={toggleTalk}
+        disabled={!supported}
+        title={supported ? (isListening ? "Stop listening" : "Push to talk") : "Speech not supported in this browser"}
+      >
+        {isListening ? <MicOff size={20} /> : <Mic size={20} />}
       </button>
       <button className="icon-button interrupt" type="button" onClick={onInterrupt} title="Interrupt">
         <Pause size={20} />
       </button>
       <form className="prompt-form" onSubmit={submit}>
         <input
-          value={text}
+          value={isListening ? "Listening..." : text}
           onChange={(event) => setText(event.target.value)}
           placeholder="Ask a follow-up..."
           aria-label="Ask the tutor"
+          readOnly={isListening}
         />
-        <button className="send-button" type="submit" title="Send">
+        <button className="send-button" type="submit" disabled={isListening} title="Send">
           <Send size={18} />
         </button>
       </form>
