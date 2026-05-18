@@ -1,18 +1,36 @@
+import logging
 from html import escape
 
 from backend.db.asset_store import AssetStore
 from backend.tools.base import BaseTool, ToolResult
+from backend.tools.gemini_client import GeminiClient
+
+logger = logging.getLogger(__name__)
 
 
 class GenerateTool(BaseTool):
     name = "generate"
 
-    def __init__(self, assets: AssetStore) -> None:
+    def __init__(self, gemini: GeminiClient, assets: AssetStore) -> None:
+        self.gemini = gemini
         self.assets = assets
 
     async def invoke(self, payload: dict) -> ToolResult:
         instruction = str(payload.get("instruction") or payload.get("prompt") or "Explain the concept visually.")
-        uri = await self.assets.put_data_uri_svg(self._fallback_svg(instruction))
+
+        image_bytes = None
+        try:
+            image_bytes = await self.gemini.generate_image_bytes(
+                f"Create a clean whiteboard diagram for a tutoring explanation. {instruction}"
+            )
+        except Exception as exc:
+            logger.warning("Image generation failed, using SVG fallback: %s", exc)
+
+        if image_bytes:
+            uri = await self.assets.put_bytes(image_bytes, "image/png", "whiteboards")
+        else:
+            uri = await self.assets.put_data_uri_svg(self._fallback_svg(instruction))
+
         return ToolResult(tool=self.name, payload={"image_uri": uri})
 
     def _fallback_svg(self, instruction: str) -> str:

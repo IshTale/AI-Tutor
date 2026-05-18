@@ -1,13 +1,16 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
+const apiBaseUrl = import.meta.env.VITE_AI_TUTOR_API_URL ?? "http://localhost:8000";
+
 export function useAudioPlayer() {
   const [isPlaying, setIsPlaying] = useState(false);
   const queue = useRef<string[]>([]);
   const active = useRef(false);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   const playNext = useCallback(() => {
-    const text = queue.current.shift();
-    if (!text || !window.speechSynthesis) {
+    const audioUrl = queue.current.shift();
+    if (!audioUrl) {
       active.current = false;
       setIsPlaying(false);
       return;
@@ -16,39 +19,42 @@ export function useAudioPlayer() {
     active.current = true;
     setIsPlaying(true);
 
-    const utterance = new SpeechSynthesisUtterance(text);
-    utterance.rate = 1.05;
-    utterance.pitch = 1.0;
-    utterance.onend = () => playNext();
-    utterance.onerror = () => playNext();
-    window.speechSynthesis.speak(utterance);
+    const url = audioUrl.startsWith("/") ? `${apiBaseUrl}${audioUrl}` : audioUrl;
+    const audio = new Audio(url);
+    audioRef.current = audio;
+    audio.onended = () => playNext();
+    audio.onerror = () => playNext();
+    audio.play().catch(() => playNext());
   }, []);
 
   const enqueue = useCallback(
-    (text: string) => {
-      if (!text.trim()) return;
-      queue.current.push(text);
-      if (!active.current) {
-        playNext();
-      }
+    (audioUrl: string) => {
+      queue.current.push(audioUrl);
+      if (!active.current) playNext();
     },
     [playNext],
   );
+
+  const unlock = useCallback(() => {
+    const audio = new Audio();
+    audio.play().catch(() => {});
+  }, []);
 
   const cancel = useCallback(() => {
     queue.current = [];
     active.current = false;
     setIsPlaying(false);
-    window.speechSynthesis?.cancel();
+    audioRef.current?.pause();
+    audioRef.current = null;
   }, []);
 
   useEffect(
     () => () => {
-      window.speechSynthesis?.cancel();
+      audioRef.current?.pause();
       queue.current = [];
     },
     [],
   );
 
-  return { enqueue, isPlaying, cancel };
+  return { enqueue, unlock, isPlaying, cancel };
 }

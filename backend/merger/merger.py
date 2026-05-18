@@ -1,4 +1,9 @@
+import asyncio
+import logging
+
+from backend.db.asset_store import AssetStore
 from backend.tools.base import ToolResult
+from backend.tools.gemini_client import GeminiClient
 from backend.ws.event_models import (
     AgentStatusEvent,
     CameraMoveEvent,
@@ -9,10 +14,14 @@ from backend.ws.event_models import (
 )
 from backend.ws.websocket_server import WebSocketHub
 
+logger = logging.getLogger(__name__)
+
 
 class Merger:
-    def __init__(self, hub: WebSocketHub) -> None:
+    def __init__(self, hub: WebSocketHub, gemini: GeminiClient, assets: AssetStore) -> None:
         self.hub = hub
+        self.gemini = gemini
+        self.assets = assets
 
     async def dispatch(self, client_id: str, results: list[ToolResult]) -> None:
         await self.hub.send_event(
@@ -21,14 +30,9 @@ class Merger:
         )
 
         pending_transcript: str | None = None
-        pending_audio: str | None = None
         pending_pointer: PointerAnimationPayload | None = None
 
         for result in results:
-            if result.tool == "speak":
-                pending_transcript = result.payload.get("transcript")
-                pending_audio = result.payload.get("audio_url")
-
             if result.tool == "reason":
                 pending_transcript = result.payload.get("text")
 
@@ -51,10 +55,10 @@ class Merger:
                     ),
                 )
 
+        # Send text immediately so the UI updates without waiting for audio
         await self.hub.send_event(
             client_id,
             TutorSpeakEvent(
-                audio_url=pending_audio,
                 transcript=pending_transcript,
                 pointer_animation=pending_pointer,
             ),
@@ -63,3 +67,20 @@ class Merger:
             client_id,
             AgentStatusEvent(phase="IDLE", message="Ready for the next question."),
         )
+
+        # Generate TTS in the background — sends a follow-up audio event when ready
+        if pending_transcript:
+            asyncio.create_task(self._send_audio(client_id, pending_transcript))
+
+    async def _send_audio(self, client_id: str, text: str) -> None:
+        try:
+            wav_bytes = await self.gemini.generate_speech_bytes(text)
+            if wav_bytes:
+                audio_url = await self.assets.put_bytes(wav_bytes, "audio/wav", "tts")
+                logger.info("Gemini TTS OK: %d bytes → %s", len(wav_bytes), audio_url)
+                await self.hub.send_event(
+                    client_id,
+                    TutorSpeakEvent(audio_url=audio_url),
+                )
+        except Exception as exc:
+            logger.warning("TTS failed: %s", exc)

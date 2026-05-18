@@ -17,6 +17,7 @@ class AssetStore:
         digest = hashlib.sha256(data).hexdigest()[:16]
         extension = mimetypes.guess_extension(content_type) or ".bin"
         extension = ".png" if content_type == "image/png" else extension
+        extension = ".wav" if content_type == "audio/wav" else extension
         target_dir = self.asset_dir / prefix
         target_dir.mkdir(parents=True, exist_ok=True)
         target = target_dir / f"{digest}{extension}"
