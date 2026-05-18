@@ -175,18 +175,20 @@ function App() {
         inkAssets={inkAssets}
         pointer={{ position: frame.position, trail: frame.trail }}
       />
-      <StatusPanel
-        status={agentStatus}
-        transcript={transcript}
-        isAudioPlaying={isPlaying || frame.active}
-        connectionStatus={connectionStatus}
-      />
-      <FileUpload files={files} selectedFileId={selectedFileId} onUpload={handleUpload} onSelect={handleSelectFile} />
-      <StudentControls
-        onSendText={handleSendText}
-        onPushToTalk={(active) => sendMessage({ type: "push_to_talk", active, selectedFileId: selectedFile?.id })}
-        onInterrupt={() => { cancel(); sendMessage({ type: "interrupt" }); }}
-      />
+      <div className="right-panel">
+        <StatusPanel
+          status={agentStatus}
+          transcript={transcript}
+          isAudioPlaying={isPlaying || frame.active}
+          connectionStatus={connectionStatus}
+        />
+        <FileUpload files={files} selectedFileId={selectedFileId} onUpload={handleUpload} onSelect={handleSelectFile} />
+        <StudentControls
+          onSendText={handleSendText}
+          onPushToTalk={(active) => sendMessage({ type: "push_to_talk", active, selectedFileId: selectedFile?.id })}
+          onInterrupt={() => { cancel(); sendMessage({ type: "interrupt" }); }}
+        />
+      </div>
     </div>
   );
 }
