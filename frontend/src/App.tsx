@@ -181,6 +181,7 @@ function App() {
           transcript={transcript}
           isAudioPlaying={isPlaying || frame.active}
           connectionStatus={connectionStatus}
+          onClearTranscript={() => setTranscript([])}
         />
         <FileUpload files={files} selectedFileId={selectedFileId} onUpload={handleUpload} onSelect={handleSelectFile} />
         <StudentControls
